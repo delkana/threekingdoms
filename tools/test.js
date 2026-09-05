@@ -1,0 +1,123 @@
+// Headless test suite. Run with: node tools/test.js
+// Loads the game scripts in a sandbox and checks data integrity, long simulations and the main systems.
+const fs = require('fs');
+const vm = require('vm');
+const path = require('path');
+
+const root = path.join(__dirname, '..', 'js');
+const src = ['data.js', 'events.js', 'game.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const ctx = { localStorage: { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; } }, console };
+vm.createContext(ctx);
+vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED;', ctx);
+const G = ctx;
+
+let passed = 0, failed = 0;
+function test(name, fn) {
+  try { fn(); passed++; console.log('  ok   ' + name); }
+  catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + (e.stack || e.message).split('\n').slice(0, 2).join('\n       ')); }
+}
+const assert = (c, msg) => { if (!c) throw new Error(msg || 'assertion failed'); };
+
+console.log('data integrity');
+test('every road joins two known cities and the map is connected', () => {
+  const ids = new Set(G.PROVINCES.map((p) => p.id));
+  for (const [a, b] of G.ROADS) assert(ids.has(a) && ids.has(b), `road ${a}-${b}`);
+  const adj = {}; for (const [a, b] of G.ROADS) { (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); }
+  const seen = new Set([G.PROVINCES[0].id]); const q = [G.PROVINCES[0].id];
+  while (q.length) { const x = q.pop(); for (const y of adj[x] || []) if (!seen.has(y)) { seen.add(y); q.push(y); } }
+  assert(seen.size === G.PROVINCES.length, 'disconnected cities: ' + G.PROVINCES.filter((p) => !seen.has(p.id)).map((p) => p.id));
+});
+test('cities do not overlap on the canvas', () => {
+  for (let i = 0; i < G.PROVINCES.length; i++) for (let j = i + 1; j < G.PROVINCES.length; j++) { const a = G.PROVINCES[i], b = G.PROVINCES[j]; assert(Math.abs(a.x - b.x) >= 98 || Math.abs(a.y - b.y) >= 44, `${a.id} overlaps ${b.id}`); }
+});
+test('every faction city exists and is owned once; every ruler sits in his own city', () => {
+  const ids = new Set(G.PROVINCES.map((p) => p.id)); const owners = {};
+  for (const f of G.FACTIONS) for (const c of f.cities) { assert(ids.has(c), `${f.id} city ${c}`); assert(!owners[c], `double owner ${c}`); owners[c] = f.id; }
+  for (const f of G.FACTIONS) { const r = G.OFFICERS.find((o) => o[0] === f.ruler); assert(r && r[6] === f.id && f.cities.includes(r[7]), `ruler ${f.ruler} misplaced`); }
+});
+test('officers are unique, placed in real cities, with birth years', () => {
+  const ids = new Set(G.PROVINCES.map((p) => p.id)); const names = new Set();
+  for (const o of G.OFFICERS) { assert(!names.has(o[0]), 'duplicate ' + o[0]); names.add(o[0]); assert(ids.has(o[7]), `${o[0]} city ${o[7]}`); assert(typeof o[9] === 'number', `${o[0]} birth year`); }
+  for (const r of G.LATER_OFFICERS) { assert(!names.has(r[0]), 'later officer clashes: ' + r[0]); assert(ids.has(r[8]), `${r[0]} city`); }
+});
+test('scripted deaths, skills, ties and item owners name real officers', () => {
+  const names = new Set([...G.OFFICERS.map((o) => o[0]), ...G.LATER_OFFICERS.map((r) => r[0]), ...G.SCENARIO_CREATED.map((c) => c[0])]);
+  for (const d of G.HISTORICAL_DEATHS) assert(names.has(d[0]), 'death of unknown ' + d[0]);
+  for (const n of Object.keys(G.OFFICER_SKILLS)) assert(names.has(n), 'skills for unknown ' + n);
+  for (const g of G.OFFICER_TIES.bonds) for (const n of g) assert(names.has(n), 'bond for unknown ' + n);
+  for (const it of G.ITEMS) if (it.owner) assert(names.has(it.owner), 'item owner unknown ' + it.owner);
+  const ids = new Set(G.PROVINCES.map((p) => p.id));
+  for (const it of G.ITEMS) if (it.city) assert(ids.has(it.city), 'item city unknown ' + it.city);
+});
+test('relations and scenarios reference real houses and cities', () => {
+  const fids = new Set(G.FACTIONS.map((f) => f.id)); const ids = new Set(G.PROVINCES.map((p) => p.id));
+  for (const r of G.INITIAL_RELATIONS) assert(fids.has(r[0]) && fids.has(r[1]), 'relation ' + r);
+  for (const sc of G.SCENARIOS) if (sc.houses) for (const [fid, h] of Object.entries(sc.houses)) for (const c of h.cities || []) assert(ids.has(c.replace('?', '')), `${sc.id} ${fid} city ${c}`);
+});
+
+console.log('systems');
+test('a fresh game has a valid ruler for every house and the Emperor with Dong Zhuo', () => {
+  G.Game.newGame(null); const S = G.Game.state();
+  for (const f of Object.values(S.factions)) { const r = S.officers[f.ruler]; assert(r && r.faction === f.id, `ruler ${f.ruler}`); }
+  assert(S.factions.dongzhuo.hasEmperor, 'emperor');
+});
+test('battle: a 1.4 strength ratio wins most of the time', () => {
+  let wins = 0; const n = 60;
+  for (let i = 0; i < n; i++) { G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.xiaopei.troops = 10000; S.provinces.xiaopei.defense = 200; S.provinces.chenliu.troops = 40000; S.provinces.chenliu.food = 1e6; const r = G.Game.attack('chenliu', 'xiaopei', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 30000); assert(r.ok, r.msg); if (r.report.result === 'captured') wins++; }
+  assert(wins / n > 0.8, `win rate ${wins}/${n}`);
+});
+test('treaties block attacks; broken treaties cost reputation', () => {
+  G.Game.newGame('caocao'); const S = G.Game.state();
+  S.diplomacy['caocao|yuanshao'] = { rel: 0, status: 'ceasefire', until: 99, cooldown: 0 };
+  const r = G.Game.attack('chenliu', 'ye', ['Xiahou Dun'], 1000); assert(!r.ok, 'attack should be blocked');
+  G.Game.breakTreaty('caocao', 'yuanshao'); assert(S.factions.caocao.treachery === 1, 'treachery');
+});
+test('exile: a wandering lord survives the loss of his last city', () => {
+  let survived = 0;
+  for (let i = 0; i < 5; i++) { G.Game.newGame(null); const S = G.Game.state(); S.provinces.pingyuan.troops = 100; S.provinces.pingyuan.defense = 0; S.provinces.ye.troops = 40000; for (let t = 0; t < 24 && S.factions.liubei.alive && S.provinces.pingyuan.owner === 'liubei'; t++) G.Game.endTurn(); if (S.factions.liubei.alive) survived++; }
+  assert(survived >= 3, `Liu Bei survived ${survived}/5`);
+});
+test('items: search finds hidden treasures and stats move with them', () => {
+  G.Game.newGame('liubei'); const S = G.Game.state(); S.items['art-of-war'].city = 'pingyuan';
+  const before = S.officers['Liu Bei'].int; let tries = 0;
+  while (!S.items['art-of-war'].owner && tries < 60) { tries++; for (const o of G.Game.factionOfficers('liubei')) o.acted = false; G.Game.search('pingyuan', 'Liu Bei'); }
+  assert(S.items['art-of-war'].owner === 'Liu Bei', 'not found'); assert(S.officers['Liu Bei'].int === before + 5, 'INT bonus');
+  G.Game.bestow('pingyuan', 'Liu Bei', 'Guan Yu'); assert(S.items['art-of-war'].owner === 'Guan Yu' && S.officers['Liu Bei'].int === before, 'bestow');
+});
+test('ranks, titles and order behave', () => {
+  G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.chenliu.gold = 9000;
+  assert(G.Game.appoint('chenliu', 'Xiahou Dun').ok, 'appoint'); assert(S.officers['Xiahou Dun'].rank === 1, 'rank');
+  S.provinces.chenliu.order = 10; assert(!G.Game.recruitTroops('chenliu', 'Cao Ren').ok, 'levy blocked by disorder');
+  assert(G.Game.pacify('chenliu', 'Xun Yu').ok && S.provinces.chenliu.order > 10, 'pacify');
+  S.factions.caocao.prestige = 40; for (const c of ['xuchang', 'puyang', 'xiaopei', 'runan', 'luoyang', 'wan', 'xiapi']) S.provinces[c].owner = 'caocao';
+  assert(G.Game.eligibleTitle('caocao') >= 2, 'eligible for Duke'); assert(G.Game.assumeTitle('caocao', 2).ok && S.factions.caocao.title === 2, 'assume');
+});
+test('every scenario starts consistent and runs ten years without error', () => {
+  for (const sc of G.SCENARIOS) {
+    G.Game.newGame(null, { scenario: sc.id }); const S = G.Game.state();
+    assert(S.year === sc.year, sc.id + ' year');
+    for (const f of Object.values(S.factions)) if (f.alive) { const r = S.officers[f.ruler]; assert(r && r.faction === f.id, `${sc.id}: ruler ${f.ruler} of ${f.id}`); }
+    for (let t = 0; t < 120; t++) G.Game.endTurn();
+    for (const f of Object.values(S.factions)) if (f.alive) { const r = S.officers[f.ruler]; assert(r && r.faction === f.id, `${sc.id} after 10y: ruler ${f.ruler}`); }
+  }
+});
+test('thirty-year observer runs stay consistent, populated and eventful', () => {
+  for (let i = 0; i < 3; i++) {
+    G.Game.newGame(null); const S = G.Game.state();
+    for (let t = 0; t < 360; t++) G.Game.endTurn();
+    for (const f of Object.values(S.factions)) if (f.alive) { const r = S.officers[f.ruler]; assert(r && r.faction === f.id, 'ruler ' + f.id); }
+    for (const o of Object.values(S.officers)) for (const k of ['ldr', 'war', 'int', 'pol', 'chr']) assert(o[k] >= 1 && o[k] <= 100, `${o.name} ${k}=${o[k]}`);
+    assert(Object.keys(S.officers).length >= 70, 'officers ' + Object.keys(S.officers).length);
+    assert(Object.keys(S.eventsFired).length >= 6, 'events fired ' + Object.keys(S.eventsFired).length);
+    assert(S.history.length >= 29, 'history snapshots');
+  }
+});
+test('save, load and undo round-trip', () => {
+  G.Game.newGame('caocao'); const S = G.Game.state(); const gold = S.provinces.chenliu.gold;
+  G.Game.develop('chenliu', 'Xun Yu', 'agri'); assert(S.provinces.chenliu.gold === gold - 200, 'spent');
+  assert(G.Game.undoMonth(), 'undo'); assert(G.Game.state().provinces.chenliu.gold === gold, 'restored');
+  G.Game.save(2); assert(G.Game.hasSave(2) && G.Game.slotInfo(2).label.includes('Cao Cao'), 'slot'); assert(G.Game.load(2), 'load');
+});
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);

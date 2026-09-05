@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Romance of the Three Kingdoms</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== Start screen ===== -->
+    <section id="start-screen">
+      <div class="start-inner">
+        <h1 class="title">三國志<span>Romance of the Three Kingdoms</span></h1>
+        <div class="scenario-pick"><label>Scenario <select id="scenario-select" class="auto-speed"></select></label></div>
+        <p class="scenario-title" id="scenario-title"></p>
+        <p class="scenario-intro" id="scenario-intro"></p>
+        <div class="start-actions">
+          <button id="btn-continue" class="btn btn-gold" hidden>Continue Saved Game</button>
+          <button id="btn-observe" class="btn btn-observe">👁 Observe the era (all warlords run by AI)</button>
+          <label class="opt">Difficulty <select id="opt-difficulty" class="auto-speed"><option value="easy">Easy · your income +20%, AI slower to attack</option><option value="normal" selected>Normal</option><option value="hard">Hard · AI income +20%, bolder and colder to your envoys</option></select></label>
+          <label class="opt">Difficulty <select id="opt-difficulty" class="auto-speed"><option value="easy">Easy · your income +20%, AI slower to attack</option><option value="normal" selected>Normal</option><option value="hard">Hard · AI income +20%, bolder and colder to your envoys</option></select></label>
+          <label class="opt"><input type="checkbox" id="opt-hist-deaths" checked> Scripted historical deaths <span class="opt-hint">(Sun Jian falls in 191, Dong Zhuo in 192, Cao Cao in 220...)</span></label>
+        </div>
+        <h2 class="choose">Choose your warlord</h2>
+        <div id="faction-grid" class="faction-grid"></div>
+      </div>
+    </section>
+
+    <!-- ===== Game screen ===== -->
+    <section id="game-screen" hidden>
+      <header id="topbar">
+        <div class="tb-left">
+          <span id="tb-faction" class="tb-faction"></span>
+          <span id="tb-date" class="tb-date"></span>
+        </div>
+        <div class="tb-stats" id="tb-stats"></div>
+        <div class="tb-actions">
+          <button class="btn" id="btn-overview">Realm</button>
+          <button class="btn" id="btn-officers">Officers</button>
+          <button class="btn" id="btn-diplomacy">Diplomacy</button>
+          <button class="btn" id="btn-objectives">Objectives</button>
+          <button class="btn" id="btn-stats" title="Charts of the era">Statistics</button>
+          <button class="btn" id="btn-wiki" title="Encyclopaedia">Lore</button>
+          <button class="btn" id="btn-help" title="Keyboard shortcuts and help (?)">?</button>
+          <button class="btn" id="btn-save">Save</button>
+          <button class="btn" id="btn-menu">Menu</button>
+          <label id="auto-pause-wrap" class="auto-pause" hidden title="Stop auto-play and show a popup when a major event happens"><input type="checkbox" id="auto-pause" checked> Pause on major events</label>
+          <select id="auto-speed" class="auto-speed" hidden title="Auto-play speed">
+            <option value="3000">Very slow · 3s</option>
+            <option value="1500">Slow · 1.5s</option>
+            <option value="600" selected>Normal · 0.6s</option>
+            <option value="200">Fast · 0.2s</option>
+          </select>
+          <button class="btn" id="btn-auto" hidden>▶▶ Auto</button>
+          <button class="btn btn-gold" id="btn-endturn">End Month ▶</button>
+        </div>
+      </header>
+
+      <div id="legend" class="legend-bar"></div>
+
+      <main id="main">
+        <div id="map-wrap">
+          <svg id="map" viewBox="0 0 1400 1050" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="zoom-ov">
+            <button id="zoom-in" title="Zoom in">+</button>
+            <button id="zoom-out" title="Zoom out">−</button>
+            <button id="zoom-reset" title="Fit map">⤢</button>
+            <button id="toggle-territory" title="Territory shading (off)">◧</button>
+          </div>
+          <div class="map-hint">drag to pan · wheel or pinch to zoom</div>
+          <div id="tip" class="tip" hidden></div>
+        </div>
+        <aside id="side">
+          <div id="panel"></div>
+        </aside>
+      </main>
+
+      <footer id="logbar">
+        <div class="log-title">Chronicle</div>
+        <div id="log"></div>
+      </footer>
+    </section>
+
+    <!-- ===== Modal ===== -->
+    <div id="modal" hidden>
+      <div class="modal-box" id="modal-box"></div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/terrain.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
