@@ -5,10 +5,10 @@ const vm = require('vm');
 const path = require('path');
 
 const root = path.join(__dirname, '..', 'js');
-const src = ['data.js', 'events.js', 'game.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const src = ['data.js', 'events.js', 'game.js', 'geo.js', 'terrain.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 const ctx = { localStorage: { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; } }, console };
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED;', ctx);
+vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP;', ctx);
 const G = ctx;
 
 let passed = 0, failed = 0;
@@ -26,6 +26,12 @@ test('every road joins two known cities and the map is connected', () => {
   const seen = new Set([G.PROVINCES[0].id]); const q = [G.PROVINCES[0].id];
   while (q.length) { const x = q.pop(); for (const y of adj[x] || []) if (!seen.has(y)) { seen.add(y); q.push(y); } }
   assert(seen.size === G.PROVINCES.length, 'disconnected cities: ' + G.PROVINCES.filter((p) => !seen.has(p.id)).map((p) => p.id));
+});
+test('the real-geography map renders and every city stands on land', () => {
+  assert(G.GEO.land.length >= 3 && G.GEO.rivers.length >= 50 && G.GEO.lakes.length >= 5, 'geo data');
+  for (const p of G.PROVINCES) { assert(p.x >= 0 && p.x <= G.MAP.W && p.y >= 0 && p.y <= G.MAP.H, `${p.id} off canvas`); assert(!G.TERRAIN.isSea(p.x, p.y), `${p.id} is in the sea`); }
+  assert(G.TERRAIN.isSea(...G.MAP.project(122.5, 35)), 'Yellow Sea is sea'); assert(!G.TERRAIN.isSea(...G.MAP.project(112, 34)), 'the central plain is land');
+  assert(G.TERRAIN.svg().length > 50000, 'svg');
 });
 test('cities do not overlap on the canvas', () => {
   for (let i = 0; i < G.PROVINCES.length; i++) for (let j = i + 1; j < G.PROVINCES.length; j++) { const a = G.PROVINCES[i], b = G.PROVINCES[j]; assert(Math.abs(a.x - b.x) >= 98 || Math.abs(a.y - b.y) >= 44, `${a.id} overlaps ${b.id}`); }

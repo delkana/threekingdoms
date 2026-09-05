@@ -5,13 +5,29 @@ rose against Dong Zhuo. Pick one of 22 warlords and unite the 46 cities of China
 
 ## The map
 
-The map follows the real geography of Han China on a 1400 by 1050 canvas: the
-Bohai, Yellow, East China and South China seas, the Yellow, Wei, Han, Yangtze,
-Huai, Xiang, Gan and Pearl rivers, Dongting and Poyang lakes, the Qinling,
-Taihang, Daba, Nanling and Wuyi ranges, the Tibetan plateau, the Gobi steppe and
-the Great Wall. Drag to pan, use the mouse wheel or pinch to zoom, and use the
-buttons in the corner to zoom or refit. The terrain is drawn once from
-`js/terrain.js`; only cities and roads redraw each turn.
+The map is drawn on real geography. Coastlines, rivers and lakes come from
+[Natural Earth](https://www.naturalearthdata.com/) (public domain): the 50m
+coastline and the 10m rivers and lakes, clipped to a window on China from
+100.5E to 125.5E and 42.4N to 21.1N, projected onto a 1400 by 1180 canvas
+(equirectangular, compressed 15% north-south) and simplified. That gives the
+Bohai, the Shandong and Liaodong peninsulas, Hainan and Taiwan, the Yellow
+River's Ordos loop, the Wei, Fen, Han, Huai, Yangtze, Jialing, Min, Xiang, Gan,
+Xi and Liao rivers and some sixty smaller ones, and Dongting, Poyang, Tai,
+Hongze and Chao lakes in their true shapes. Mountain ranges, the Tibetan
+plateau, the Gobi steppe, the Great Wall and the sea labels are placed by
+longitude and latitude in `js/terrain.js`.
+
+Every city carries the real longitude and latitude of its historical seat
+(Chang'an at Xi'an, Ye near Handan, Jianye at Nanjing, Jiaozhi at Hanoi, and so
+on) and is projected with the same constants, with a nudge of a few pixels where
+neighbours such as Wan, Xinye and Xiangyang would otherwise overlap. Roads bow
+gently between their cities. Drag to pan, use the mouse wheel or pinch to zoom,
+and use the buttons in the corner to zoom or refit. The terrain is drawn once;
+only cities and roads redraw each turn.
+
+To rebuild the geography (for example after changing the projection in
+`MAP`), run `node tools/buildmap.js`; it downloads the three Natural Earth
+GeoJSON files into `tools/naturalearth/` on first use and writes `js/geo.js`.
 
 Cities span from Xiangping in Liaodong to Jiaozhi on the Gulf of Tonkin, with
 passes such as Hongnong, Shangyong, Zitong and Yong'an guarding the routes
@@ -471,7 +487,9 @@ era run uninterrupted.
 | `css/style.css` | Styling |
 | `js/data.js` | Scenario data: map, roads, factions, officers, deaths |
 | `js/events.js` | Historical events, decisions, objectives, destiny paths |
-| `js/terrain.js` | Static map background: coast, rivers, mountains |
+| `js/geo.js` | Generated: Natural Earth coastline, rivers and lakes in canvas coordinates |
+| `js/terrain.js` | Static map background drawn from `geo.js` plus mountains, steppe, wall and labels |
+| `tools/buildmap.js` | Rebuilds `js/geo.js` from Natural Earth data |
 | `js/game.js` | Engine: state, commands, battles, economy, AI, save/load |
 | `js/ui.js` | Map rendering, panels, dialogs |
 | `tools/sim.js` | Headless multi-year simulation for balance testing |

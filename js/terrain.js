@@ -1,96 +1,58 @@
 // ============================================================
-//  Static map background: coast and seas, rivers and lakes,
-//  mountain ranges, steppe, the Great Wall and labels.
-//  Coordinates match the 1400 x 1050 canvas used by PROVINCES.
+//  Static map background drawn on real geography.
+//  Coastlines, rivers and lakes come from Natural Earth (public
+//  domain) via js/geo.js, already projected to the canvas by
+//  tools/buildmap.js with the MAP projection in js/data.js.
+//  Mountain ranges, the steppe, the Great Wall and labels are
+//  placed here by longitude/latitude and projected the same way.
 //  Also exposes isSea(x, y) for territory shading.
 // ============================================================
 
 const TERRAIN = (() => {
-  const W = 1400, H = 1050;
+  const W = MAP.W, H = MAP.H;
+  const P = (lon, lat) => MAP.project(lon, lat);
+  const f1 = (v) => (Math.round(v * 10) / 10).toString();
 
   // deterministic jitter so the map looks the same every render
   let seed = 20250904;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-  const pts = (arr) => arr.map((p) => p.join(',')).join(' ');
+  const pts = (arr) => arr.map((p) => `${f1(p[0])},${f1(p[1])}`).join(' ');
 
-  // Coastline from Liaodong (north) to the Gulf of Tonkin (south). Land lies west of it.
-  const COAST = [
-    [1400, 130], [1340, 150], [1300, 185], [1280, 205], [1260, 170], [1240, 120], [1200, 105], [1150, 120],
-    [1110, 150], [1075, 190], [1065, 225], [1120, 226], [1180, 222], [1250, 212], [1290, 232], [1270, 262],
-    [1215, 292], [1175, 318], [1160, 360], [1165, 410], [1190, 470], [1230, 530], [1290, 590], [1345, 630],
-    [1360, 690], [1330, 730], [1300, 760], [1290, 810], [1250, 870], [1180, 930], [1100, 975], [1010, 1005],
-    [950, 1030], [860, 1040], [790, 1035], [760, 1050], [720, 1040], [690, 1020], [640, 1030], [600, 1050],
-  ];
-  const SEA_POLY = [...COAST, [1400, 1050], [1400, 130]];
-
-  // Rivers. `to` names what the mouth joins: another river, 'sea' or 'lake'. Mouths are snapped onto
-  // the parent's rendered curve (or the coastline) at build time so every junction closes.
-  const RIVERS = [
-    // the two great rivers
-    { name: 'yellow',  w: 4,   to: 'sea',     p: [[150, 130], [260, 90], [420, 70], [560, 80], [680, 110], [700, 200], [690, 300], [665, 325], [720, 330], [790, 350], [860, 335], [905, 320], [960, 305], [1030, 262], [1078, 212]] },
-    { name: 'yangtze', w: 4.5, to: 'sea',     p: [[120, 520], [200, 600], [300, 660], [450, 660], [540, 690], [565, 700], [620, 715], [690, 705], [760, 690], [840, 650], [900, 690], [930, 735], [1010, 690], [1090, 650], [1150, 625], [1240, 600], [1300, 605], [1345, 630]] },
-    // Yellow River tributaries
-    { name: 'wei',     w: 2.5, to: 'yellow',  p: [[320, 330], [380, 372], [490, 385], [600, 352], [665, 325]] },
-    { name: 'jing',    w: 1.5, to: 'wei',     p: [[400, 280], [450, 340], [490, 385]] },
-    { name: 'fen',     w: 2,   to: 'yellow',  p: [[770, 120], [760, 210], [725, 280], [690, 300]] },
-    { name: 'luo',     w: 1.8, to: 'yellow',  p: [[630, 430], [700, 365], [720, 330]] },
-    { name: 'qi',      w: 1.6, to: 'yellow',  p: [[820, 230], [855, 290], [880, 325], [905, 320]] },
-    // Yangtze tributaries
-    { name: 'min',     w: 2,   to: 'yangtze', p: [[290, 500], [300, 590], [330, 640], [380, 660]] },
-    { name: 'jialing', w: 2,   to: 'yangtze', p: [[470, 520], [440, 590], [450, 660]] },
-    { name: 'han',     w: 3,   to: 'yangtze', p: [[470, 445], [500, 470], [615, 500], [660, 560], [700, 605], [770, 650], [840, 650]] },
-    { name: 'yuan',    w: 1.8, to: 'lake',    p: [[480, 800], [560, 765], [622, 745]] },
-    { name: 'xiang',   w: 2.5, to: 'lake',    p: [[760, 930], [740, 815], [720, 760], [678, 745]] },
-    { name: 'dongting-out', w: 2.2, to: 'yangtze', p: [[652, 732], [690, 705]] },
-    { name: 'gan',     w: 2.5, to: 'lake',    p: [[860, 960], [930, 880], [1000, 825], [980, 795]] },
-    { name: 'poyang-out',   w: 2.2, to: 'yangtze', p: [[975, 752], [965, 715]] },
-    { name: 'wusong',  w: 1.5, to: 'yangtze', p: [[1222, 665], [1290, 660], [1345, 630]] },
-    // Huai system
-    { name: 'huai',    w: 3,   to: 'sea',     p: [[790, 505], [870, 520], [960, 510], [1040, 535], [1090, 550], [1180, 525], [1180, 475]] },
-    { name: 'ying',    w: 1.6, to: 'huai',    p: [[850, 400], [880, 445], [925, 480], [960, 510]] },
-    // others
-    { name: 'pearl',   w: 2.5, to: 'sea',     p: [[720, 960], [800, 985], [880, 1005], [940, 1032]] },
-    { name: 'red',     w: 2,   to: 'sea',     p: [[440, 940], [560, 995], [640, 1030]] },
-    { name: 'liao',    w: 2,   to: 'sea',     p: [[1290, 20], [1290, 80], [1255, 130]] },
-    { name: 'luan',    w: 1.5, to: 'sea',     p: [[1000, 60], [1040, 110], [1080, 165]] },
-  ];
-
-  const LAKES = [
-    { cx: 650, cy: 745, rx: 40, ry: 24 },   // Dongting
-    { cx: 975, cy: 775, rx: 24, ry: 34 },   // Poyang
-    { cx: 1200, cy: 665, rx: 22, ry: 14 },  // Taihu
-  ];
-
-  // Mountain ranges: from -> to, count, glyph size
+  // Mountain ranges: from -> to (lon/lat), count, glyph size
   const RANGES = [
-    { a: [140, 280], b: [260, 320], n: 9, s: 9 },      // Qilian
-    { a: [330, 420], b: [680, 412], n: 16, s: 10 },    // Qinling
-    { a: [480, 560], b: [640, 560], n: 8, s: 9 },      // Daba
-    { a: [590, 735], b: [650, 680], n: 5, s: 8 },      // Wu Mountains / gorges
-    { a: [800, 150], b: [830, 250], n: 6, s: 7 },      // Taihang
-    { a: [830, 70], b: [1050, 90], n: 9, s: 8 },       // Yan Mountains
-    { a: [880, 590], b: [960, 600], n: 5, s: 7 },      // Dabie
-    { a: [640, 975], b: [780, 985], n: 7, s: 8 },      // Nanling (west)
-    { a: [870, 955], b: [1000, 932], n: 6, s: 8 },     // Nanling (east)
-    { a: [1080, 850], b: [1170, 930], n: 7, s: 9 },    // Wuyi
-    { a: [240, 720], b: [320, 780], n: 6, s: 9 },      // Yunnan plateau
-    { a: [420, 860], b: [520, 920], n: 6, s: 9 },
-    { a: [430, 700], b: [500, 720], n: 4, s: 8 },
-    { a: [400, 40], b: [650, 50], n: 6, s: 7 },        // Yinshan
-    { a: [1035, 298], b: [1050, 318], n: 2, s: 8 },    // Mount Tai
-    { a: [1240, 40], b: [1380, 100], n: 5, s: 8 },     // Changbai
-  ];
-  const PLATEAU = { x0: 40, y0: 380, x1: 230, y1: 760, n: 26, s: 12 };
+    { a: [100.6, 39.0], b: [102.6, 37.6], n: 8, s: 9 },      // Qilian
+    { a: [105.6, 34.0], b: [110.8, 33.6], n: 16, s: 10 },    // Qinling
+    { a: [107.4, 32.3], b: [110.0, 32.0], n: 8, s: 9 },      // Daba
+    { a: [109.6, 30.7], b: [110.6, 31.3], n: 5, s: 8 },      // Wu Mountains, the gorges
+    { a: [113.3, 38.0], b: [113.9, 36.3], n: 6, s: 7 },      // Taihang
+    { a: [115.6, 40.7], b: [119.2, 40.6], n: 9, s: 8 },      // Yan Mountains
+    { a: [115.3, 31.4], b: [116.6, 31.1], n: 5, s: 7 },      // Dabie
+    { a: [110.2, 25.3], b: [112.5, 25.3], n: 7, s: 8 },      // Nanling (west)
+    { a: [113.4, 25.2], b: [115.4, 25.0], n: 6, s: 8 },      // Nanling (east)
+    { a: [117.0, 27.6], b: [118.5, 25.9], n: 7, s: 9 },      // Wuyi
+    { a: [101.6, 27.2], b: [103.0, 26.1], n: 6, s: 9 },      // Yunnan plateau
+    { a: [103.6, 24.7], b: [105.6, 24.1], n: 6, s: 9 },
+    { a: [108.4, 28.6], b: [110.0, 27.6], n: 5, s: 8 },      // Wuling range
+    { a: [108.0, 41.3], b: [112.6, 41.0], n: 6, s: 7 },      // Yinshan
+    { a: [117.0, 36.3], b: [117.3, 36.1], n: 2, s: 8 },      // Mount Tai
+    { a: [124.6, 42.1], b: [125.5, 41.2], n: 4, s: 8 },      // Changbai
+    { a: [103.2, 33.4], b: [104.6, 32.2], n: 5, s: 9 },      // Min Mountains, west of the Shu basin
+  ].map((r) => ({ a: P(...r.a), b: P(...r.b), n: r.n, s: r.s }));
+  const PLATEAU = (() => { const [x0, y0] = P(100.5, 37.0), [x1, y1] = P(102.4, 29.0); return { x0, y0, x1, y1, n: 22, s: 12 }; })();
 
-  const WALL = [[250, 150], [400, 120], [560, 110], [700, 130], [820, 90], [960, 85], [1080, 110]];
+  // The Great Wall of the Han, roughly, from the Hexi corridor to Liaodong
+  const WALL = [[100.6, 39.9], [103.6, 38.6], [105.9, 37.5], [107.6, 37.9], [109.7, 39.4], [111.6, 40.2], [113.9, 40.5], [116.0, 40.6], [118.2, 40.5], [119.9, 40.3], [121.4, 41.0], [123.0, 41.6]].map((c) => P(...c));
+  // the steppe north of the wall
+  const STEPPE = [[100.5, 42.4], [125.5, 42.4], [125.5, 41.9], [123.0, 41.8], [121.4, 41.2], [119.9, 40.5], [118.2, 40.7], [116.0, 40.8], [113.9, 40.7], [111.6, 40.4], [109.7, 39.6], [107.6, 38.1], [105.9, 37.7], [103.6, 38.8], [100.5, 40.1]].map((c) => P(...c));
 
+  // [text, lon, lat, rotation, size]
   const LABELS = [
-    ['Bohai', 1165, 172, 0, 14], ['Yellow Sea', 1290, 430, 0, 16], ['East China Sea', 1330, 830, -70, 16],
-    ['South China Sea', 1130, 1030, 0, 16], ['Gulf of Tonkin', 665, 1044, 0, 10],
-    ['Yellow River', 500, 62, -3, 12], ['Yangtze', 545, 738, 12, 12], ['Han River', 655, 545, 55, 10], ['Huai', 1030, 522, 8, 10], ['Wei', 430, 398, 5, 9],
-    ['Qinling', 540, 445, 0, 11], ['Nanling', 720, 1000, 0, 11], ['Taihang', 845, 210, 72, 9], ['Wuyi', 1140, 900, 42, 10], ['Daba', 560, 582, 0, 9],
-    ['Great Wall', 610, 98, -3, 10], ['Gobi', 330, 55, 0, 13], ['Tibetan Plateau', 120, 560, -74, 13], ['Liaodong', 1245, 140, 0, 10],
-    ['Dongting', 650, 749, 0, 8], ['Poyang', 975, 778, 0, 8], ['Taihu', 1200, 668, 0, 7],
+    ['Bohai', 119.8, 38.7, 0, 14], ['Yellow Sea', 122.6, 35.0, 0, 16], ['East China Sea', 123.6, 29.0, -70, 16],
+    ['South China Sea', 115.5, 21.5, 0, 16], ['Gulf of Tonkin', 107.6, 21.6, 0, 10],
+    ['Yellow River', 106.0, 40.4, -3, 12], ['Yangtze', 109.0, 30.4, 10, 12], ['Han River', 111.1, 33.0, 55, 10], ['Huai', 115.9, 33.35, 8, 10], ['Wei', 107.6, 34.5, 5, 9],
+    ['Qinling', 108.4, 33.5, 0, 11], ['Nanling', 112.2, 24.9, 0, 11], ['Taihang', 113.7, 37.2, 72, 9], ['Wuyi', 117.9, 26.6, 42, 10], ['Daba', 108.7, 31.9, 0, 9],
+    ['Great Wall', 110.5, 39.9, -3, 10], ['Gobi', 104.0, 41.9, 0, 13], ['Tibetan Plateau', 101.0, 33.0, -74, 13], ['Liaodong', 122.7, 40.2, 0, 10],
+    ['Dongting', 112.8, 29.15, 0, 8], ['Poyang', 116.3, 29.0, 0, 8], ['Taihu', 120.2, 31.15, 0, 7], ['Shu', 104.6, 30.2, 0, 11],
   ];
 
   function mountain(x, y, s) {
@@ -99,7 +61,6 @@ const TERRAIN = (() => {
     return `<path d="M${x1.toFixed(1)},${yb.toFixed(1)} L${x.toFixed(1)},${yt.toFixed(1)} L${x2.toFixed(1)},${yb.toFixed(1)} Z" class="mtn"/>` +
       `<path d="M${x.toFixed(1)},${yt.toFixed(1)} L${x2.toFixed(1)},${yb.toFixed(1)} L${(x + w * 0.25).toFixed(1)},${yb.toFixed(1)} Z" class="mtn-lit"/>`;
   }
-
   function range(r) {
     let out = '';
     const dx = r.b[0] - r.a[0], dy = r.b[1] - r.a[1];
@@ -112,14 +73,13 @@ const TERRAIN = (() => {
     }
     return out;
   }
-
   function plateau(p) {
     let out = '';
     for (let i = 0; i < p.n; i++) out += mountain(p.x0 + rnd() * (p.x1 - p.x0), p.y0 + rnd() * (p.y1 - p.y0), p.s * (0.7 + rnd() * 0.6));
     return out;
   }
 
-  // Smooth a polyline with quadratic curves through segment midpoints; endpoints are exact.
+  // Smooth a polyline with quadratic curves through segment midpoints; endpoints are exact. Used for roads.
   function smoothPath(p) {
     if (p.length < 3) return `M${p[0][0]},${p[0][1]} L${p[1][0]},${p[1][1]}`;
     let d = `M${p[0][0]},${p[0][1]}`;
@@ -131,112 +91,48 @@ const TERRAIN = (() => {
     d += ` L${last[0]},${last[1]}`;
     return d;
   }
+  const linePath = (p) => 'M' + p.map((q) => `${f1(q[0])},${f1(q[1])}`).join(' L');
+  const polyPath = (p) => linePath(p) + ' Z';
 
-  // Catmull-Rom spline through every vertex, as cubic Beziers (rivers must pass through their vertices).
-  function splineControls(p, i) {
-    const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(p.length - 1, i + 2)];
-    return [p1, [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6], p2];
+  // ---- water ----
+  const LAND_PATH = GEO.land.map(polyPath).join(' ');
+  function river(r) {
+    const d = linePath(r.pts);
+    const major = r.r <= 3, mid = r.r <= 6;
+    const bank = major ? 5.2 : mid ? 3.6 : 2.2, w = major ? 3 : mid ? 2 : 1.1;
+    return `<path d="${d}" class="river-bank" style="stroke-width:${bank}"/><path d="${d}" class="river" style="stroke-width:${w}"/>` +
+      (mid ? `<path d="${d}" class="river-glint" style="stroke-width:${major ? 1 : 0.7}"/>` : '');
   }
-  function splinePath(p) {
-    if (p.length < 3) return `M${p[0][0]},${p[0][1]} L${p[1][0]},${p[1][1]}`;
-    let d = `M${p[0][0]},${p[0][1]}`;
-    for (let i = 0; i < p.length - 1; i++) {
-      const [, c1, c2, p2] = splineControls(p, i);
-      d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+
+  function inside(poly, x, y) {
+    let ins = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
     }
-    return d;
+    return ins;
   }
-  // Dense sampling of the same spline, for snapping junctions.
-  function splineSamples(p, per = 14) {
-    const out = [];
-    if (p.length < 3) return polylineSamples(p, per);
-    for (let i = 0; i < p.length - 1; i++) {
-      const [p1, c1, c2, p2] = splineControls(p, i);
-      for (let k = 0; k < per; k++) {
-        const t = k / per, u = 1 - t;
-        out.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0],
-                  u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
-      }
-    }
-    out.push(p[p.length - 1]);
-    return out;
-  }
-  function polylineSamples(p, per = 10) {
-    const out = [];
-    for (let i = 0; i < p.length - 1; i++) for (let k = 0; k < per; k++) { const t = k / per; out.push([p[i][0] + (p[i + 1][0] - p[i][0]) * t, p[i][1] + (p[i + 1][1] - p[i][1]) * t]); }
-    out.push(p[p.length - 1]);
-    return out;
-  }
-  function nearest(samples, pt) {
-    let best = samples[0], bd = Infinity;
-    for (const q of samples) { const d = (q[0] - pt[0]) ** 2 + (q[1] - pt[1]) ** 2; if (d < bd) { bd = d; best = q; } }
-    return best;
-  }
-
-  // Resolve river geometry once: snap mouths onto parents or the coast, and overshoot so the join is hidden.
-  let RIVER_GEOM = null;
-  function riverGeometry() {
-    if (RIVER_GEOM) return RIVER_GEOM;
-    const byName = Object.fromEntries(RIVERS.map((r) => [r.name, r]));
-    const resolved = {}, samples = {};
-    const coastSamples = polylineSamples(COAST, 12);
-    const overshoot = (pts, target, len) => {
-      const prev = pts[pts.length - 2];
-      const dx = target[0] - prev[0], dy = target[1] - prev[1], L = Math.hypot(dx, dy) || 1;
-      return [target[0] + (dx / L) * len, target[1] + (dy / L) * len];
-    };
-    const resolve = (r) => {
-      if (resolved[r.name]) return resolved[r.name];
-      const pts = r.p.map((q) => q.slice());
-      const last = pts[pts.length - 1];
-      if (r.to === 'sea') {
-        pts[pts.length - 1] = overshoot(pts, nearest(coastSamples, last), 8);   // into the sea; the sea is drawn on top
-      } else if (r.to && r.to !== 'lake' && byName[r.to]) {
-        resolve(byName[r.to]);
-        pts[pts.length - 1] = overshoot(pts, nearest(samples[r.to], last), byName[r.to].w * 0.6); // under the parent's bank
-      }
-      resolved[r.name] = pts;
-      samples[r.name] = splineSamples(pts);
-      return pts;
-    };
-    for (const r of RIVERS) resolve(r);
-    // draw order: tributaries first, parents on top of them
-    const depth = (r) => (r.to && byName[r.to] ? 1 + depth(byName[r.to]) : 0);
-    const order = [...RIVERS].sort((a, b) => depth(b) - depth(a));
-    RIVER_GEOM = order.map((r) => ({ r, d: splinePath(resolved[r.name]) }));
-    return RIVER_GEOM;
-  }
-
-  function river({ r, d }) {
-    // dark bank underneath, lit water on top, thin highlight along the middle for the big rivers
-    let out = `<path d="${d}" class="river-bank" style="stroke-width:${r.w + 2.4}"/>` +
-      `<path d="${d}" class="river" style="stroke-width:${r.w}"/>`;
-    if (r.w >= 3) out += `<path d="${d}" class="river-glint" style="stroke-width:${Math.max(0.8, r.w * 0.3)}"/>`;
-    return out;
-  }
-
-  // Ray-casting point-in-polygon against the sea polygon.
+  const seaCache = new Map();
   function isSea(x, y) {
-    if (x >= W) return true;
-    let inside = false;
-    const P = SEA_POLY;
-    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
-      const [xi, yi] = P[i], [xj, yj] = P[j];
-      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
+    if (x < 0 || y < 0 || x >= W || y >= H) return true;
+    const key = ((x * 4) | 0) * 100000 + ((y * 4) | 0);
+    if (seaCache.has(key)) return seaCache.get(key);
+    let land = false;
+    for (const poly of GEO.land) if (inside(poly, x, y)) { land = true; break; }
+    if (land) for (const l of GEO.lakes) if (inside(l.pts, x, y)) { land = false; break; }
+    seaCache.set(key, !land);
+    return !land;
   }
 
   function svg() {
     seed = 20250904;
-    const seaPoly = pts(SEA_POLY);
-    const steppe = pts([[0, 0], [700, 0], [690, 100], [560, 80], [420, 70], [260, 90], [150, 130], [60, 260], [0, 300]]);
+    const [sx, sy] = P(113.5, 26.0), [bx, by] = P(105.0, 30.6);
     return `
       <defs>
         <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#3b3526"/><stop offset="0.45" stop-color="#34342a"/><stop offset="1" stop-color="#2c3a2c"/>
         </linearGradient>
-        <radialGradient id="seaGrad" cx="0.7" cy="0.5" r="0.8">
+        <radialGradient id="seaGrad" cx="0.75" cy="0.45" r="0.9">
           <stop offset="0" stop-color="#244a5e"/><stop offset="1" stop-color="#162d3b"/>
         </radialGradient>
         <pattern id="dunes" width="14" height="10" patternUnits="userSpaceOnUse">
@@ -245,24 +141,25 @@ const TERRAIN = (() => {
         <pattern id="waves" width="40" height="18" patternUnits="userSpaceOnUse">
           <path d="M0,9 Q10,4 20,9 T40,9" fill="none" stroke="rgba(160,210,235,0.10)" stroke-width="1"/>
         </pattern>
-        <filter id="coastGlow"><feGaussianBlur stdDeviation="6"/></filter>
-        <filter id="soft" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="7"/></filter>
-        <clipPath id="landClip"><path clip-rule="evenodd" d="M0,0 H${W} V${H} H0 Z M${SEA_POLY.map((p) => p.join(',')).join(' L')} Z"/></clipPath>
+        <filter id="coastGlow" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="5"/></filter>
+        <clipPath id="landClip"><path d="${LAND_PATH}"/></clipPath>
       </defs>
-      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#landGrad)"/>
-      <polygon points="${steppe}" fill="#4a4030" opacity="0.75"/>
-      <polygon points="${steppe}" fill="url(#dunes)"/>
-      <ellipse cx="880" cy="880" rx="520" ry="230" fill="#2f5a34" opacity="0.18"/>
-      <ellipse cx="330" cy="620" rx="150" ry="120" fill="#3f6a3a" opacity="0.14"/>
+      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#seaGrad)"/>
+      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#waves)"/>
+      <path d="${LAND_PATH}" fill="none" stroke="#8fc3dc" stroke-width="12" opacity="0.28" filter="url(#coastGlow)"/>
+      <path d="${LAND_PATH}" fill="url(#landGrad)"/>
+      <g clip-path="url(#landClip)">
+        <polygon points="${pts(STEPPE)}" fill="#4a4030" opacity="0.75"/>
+        <polygon points="${pts(STEPPE)}" fill="url(#dunes)"/>
+        <ellipse cx="${f1(sx)}" cy="${f1(sy)}" rx="420" ry="200" fill="#2f5a34" opacity="0.18"/>
+        <ellipse cx="${f1(bx)}" cy="${f1(by)}" rx="130" ry="110" fill="#3f6a3a" opacity="0.14"/>
+      </g>
       <g id="territory-slot"></g>
       <g class="mountains">${RANGES.map(range).join('')}${plateau(PLATEAU)}</g>
-      <g class="rivers">${riverGeometry().map(river).join('')}${LAKES.map((l) => `<ellipse cx="${l.cx}" cy="${l.cy}" rx="${l.rx}" ry="${l.ry}" class="lake"/>`).join('')}</g>
-      <polygon points="${seaPoly}" fill="#8fc3dc" opacity="0.35" filter="url(#coastGlow)"/>
-      <polygon points="${seaPoly}" fill="url(#seaGrad)"/>
-      <polygon points="${seaPoly}" fill="url(#waves)"/>
-      <polyline points="${pts(COAST)}" class="coast"/>
+      <g class="rivers">${GEO.rivers.filter((r) => !r.lake).map(river).join('')}${GEO.lakes.map((l) => `<path d="${polyPath(l.pts)}" class="lake"/>`).join('')}</g>
+      <path d="${LAND_PATH}" class="coast"/>
       <polyline points="${pts(WALL)}" class="wall"/>
-      <g class="geo-labels">${LABELS.map(([t, x, y, rot, size]) => `<text x="${x}" y="${y}" transform="rotate(${rot} ${x} ${y})" style="font-size:${size}px">${t}</text>`).join('')}</g>`;
+      <g class="geo-labels">${LABELS.map(([t, lon, lat, rot, size]) => { const [x, y] = P(lon, lat); return `<text x="${f1(x)}" y="${f1(y)}" transform="rotate(${rot} ${f1(x)} ${f1(y)})" style="font-size:${size}px">${t}</text>`; }).join('')}</g>`;
   }
 
   return { svg, W, H, isSea, smoothPath };

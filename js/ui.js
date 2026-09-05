@@ -211,10 +211,15 @@ const UI = (() => {
     for (const [a, b, type, via] of ROADS) {
       const hl = selected && (a === selected || b === selected);
       const mods = Game.battleModifiers(a, b);
-      const points = [[pos[a].x, pos[a].y], ...(via || []), [pos[b].x, pos[b].y]];
+      let mid = via && via.length ? via[Math.floor((via.length - 1) / 2)] : null;
+      if (!mid) {   // bow the road a little to one side (the same side every render)
+        const dx = pos[b].x - pos[a].x, dy = pos[b].y - pos[a].y, len = Math.hypot(dx, dy) || 1;
+        const side = (a + b).length % 2 ? 1 : -1;
+        mid = [Math.round((pos[a].x + pos[b].x) / 2 - dy / len * len * 0.07 * side), Math.round((pos[a].y + pos[b].y) / 2 + dx / len * len * 0.07 * side)];
+      }
+      const points = [[pos[a].x, pos[a].y], ...(via && via.length ? via : [mid]), [pos[b].x, pos[b].y]];
       roads += `<path class="road road-${type}${hl ? ' hl' : ''}${mods.blocked ? ' closed' : ''}" d="${TERRAIN.smoothPath(points)}"/>`;
       if (type !== 'plain') {
-        const mid = via && via.length ? via[Math.floor((via.length - 1) / 2)] : [(pos[a].x + pos[b].x) / 2, (pos[a].y + pos[b].y) / 2];
         glyphs += `<text class="road-glyph g-${type}${mods.blocked ? ' closed' : ''}" x="${mid[0]}" y="${mid[1] + 4}" text-anchor="middle">${mods.blocked ? '❄' : GLYPH[type]}</text>`;
       }
     }
