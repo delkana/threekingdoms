@@ -382,3 +382,47 @@ table.off th.sorted { color: var(--gold2); }
 .wiki-entry.wiki-focus { background: #3d3222; border-left: 3px solid var(--gold); }
 .bio-link { cursor: pointer; border-bottom: 1px dotted var(--gold); }
 kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--bg2); font-family: var(--serif); font-size: 12px; }
+
+/* ================= Phones ================= */
+@media (max-width: 640px) {
+  body { font-size: 13px; }
+  #topbar { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 8px; }
+  .tb-left { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+  .tb-faction { font-size: 15px; }
+  .tb-stats, .tb-actions, .legend-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tb-stats::-webkit-scrollbar, .tb-actions::-webkit-scrollbar, .legend-bar::-webkit-scrollbar { display: none; }
+  .tb-stats { gap: 12px; }
+  .stat { flex-direction: row; align-items: baseline; gap: 4px; white-space: nowrap; }
+  .stat b { font-size: 13px; }
+  .stat span { font-size: 9.5px; letter-spacing: 0.5px; }
+  .tb-actions { gap: 5px; padding: 2px 0; }
+  .tb-actions .btn, .tb-actions select, .tb-actions label { flex-shrink: 0; white-space: nowrap; }
+  .tb-actions .btn { padding: 6px 9px; font-size: 12px; }
+  #btn-endturn, #btn-auto, #auto-speed, #auto-pause-wrap { order: -1; }   /* the buttons that matter come first in the scroll row */
+  .auto-pause { font-size: 11px; }
+  .legend-bar { gap: 2px 10px; padding: 4px 8px; }
+  #main { flex-direction: column; }
+  #map-wrap { flex: 0 0 42vh; min-height: 0; }
+  #side { width: 100%; max-height: none; flex: 1; min-height: 0; border-left: none; border-top: 1px solid var(--border); }
+  #panel { padding: 10px 10px 24px; }
+  .ph h2 { font-size: 19px; }
+  .cmds button { padding: 10px 6px; }
+  #logbar { height: 84px; }
+  .zoom-ov button { width: 38px; height: 38px; font-size: 20px; }
+  .map-hint { display: none; }
+  .tip { display: none; }
+  .modal-box { width: 100vw; max-height: 100vh; max-height: 100dvh; border-radius: 0; border-left: none; border-right: none; padding: 14px 12px; }
+  .modal-box h3 { font-size: 18px; }
+  #modal { justify-content: flex-start; align-items: flex-start; }   /* pin to the top-left so the box never drifts on odd viewports */
+  .modal-box { overflow-x: auto; }
+  .modal-box table { font-size: 12px; }
+  table.overview small.cities { display: none; }
+  table.overview td { padding: 4px 3px; }
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions .btn, .modal-box button { padding: 8px 12px; }
+  .roster-controls { flex-wrap: wrap; }
+  .roster-controls select { max-width: 100%; }
+  .start-inner { padding: 18px 12px 40px; }
+  .faction-grid { grid-template-columns: 1fr; }
+  .fcard:hover { transform: none; }
+}
