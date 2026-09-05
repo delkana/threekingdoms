@@ -165,8 +165,9 @@ family with generated names and middling stats, free to be recruited.
 Talent favours the under-staffed. A house with fewer officers than cities
 draws extra worthies, and they appear in the cities of the houses that need
 them most, so an unlikely house that suddenly rises to ten cities is not
-stranded with a staff of four. Total numbers are still capped so the realm does
-not fill with nobodies.
+stranded with a staff of four. The well is not bottomless: at most seventy
+generated worthies appear in a game, the later ones are lesser men, and none
+come forward after 245. Past that the realm lives on the officers it has.
 
 ## Treasures
 
@@ -300,6 +301,26 @@ instead of attacking anyone but small prey. Consolidation lasts at most two
 years, and never applies against the last rival. A hegemon grants no fiefs to
 guests in exile, and its neighbours that are cautious or builders bandwagon
 with it rather than resist.
+
+### Unifying the realm
+
+A house that holds half the map (or two fifths of it and two and a half times
+the second power) stops playing politics: the Realm screen marks it *unifying
+the realm*. It signs no treaties and accepts none, renounces every existing
+pact with a rival it outweighs by half, and attacks on every front where it has
+even odds rather than waiting for overwhelming ones; the main blow commits
+nearly the whole hammer garrison. Its interior towns are stripped to a token
+garrison, a quiet town may be left to its magistrates while its only officer
+marches the levies out, and the central reserve rides to the main offensive
+whenever no border is in danger. Smaller rivals are finished first.
+
+Two supporting rules keep the last stands from lasting forever. A stronghold of
+a house down to three towns or fewer, with enemies on every road and a larger
+host camped outside, is **cut off**: it loses three per cent of its soldiers
+and grain a month and its order frays. And populations drained by decades of
+war **recover**: growth is faster the emptier a city is, and settlers return to
+orderly land that stands below two fifths of its ceiling, so the land can raise
+armies again instead of sinking into an exhausted stalemate.
 
 ### Finishing the war
 
@@ -456,12 +477,21 @@ era run uninterrupted.
 | `tools/sim.js` | Headless multi-year simulation for balance testing |
 | `tools/battlesim.js` | Attack win-rate versus strength ratio |
 
+## Exile has limits
+
+A wandering house may fall twice. The third time it loses its last city no
+lord will shelter it and the house is finished. Twelve years in exile, counted
+across every host and every stint, also end it, so a house cannot live forever
+as a guest by moving from court to court.
+
 ## Population
 
-Every city's population grows slowly (faster in spring) toward a ceiling set by
-its size: about 260,000 for a town, 520,000 for a city and 900,000 for a great
-city. Population caps sustainable levies, shrinks when a city is sacked or
-starves, and no longer depends on a regional trait.
+Every city's population grows (faster in spring, and faster the further it
+stands below its ceiling) toward a limit set by its size: about 260,000 for a
+town, 520,000 for a city and 900,000 for a great city. Orderly cities below two
+fifths of their ceiling also draw settlers back. Population caps sustainable
+levies, shrinks when a city is sacked or conscripted, and no longer depends on
+a regional trait.
 
 ## Balance tools
 

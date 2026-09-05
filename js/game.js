@@ -714,7 +714,7 @@ const Game = (() => {
     to.posture = 'hold';
     to.training = R.mods && R.mods.external ? 60 : from.training;
     to.defense = Math.max(0, Math.floor(to.defense * 0.7));
-    to.pop = Math.floor(to.pop * 0.93);
+    to.pop = Math.floor(to.pop * 0.95);
     for (const o of attOfficers) o.city = R.to;
 
     // captives previously held here by the old owner are freed: home if their house lives, else masterless
@@ -794,6 +794,7 @@ const Game = (() => {
     const seat = rulerOf(host.id) ? rulerOf(host.id).city : factionProvinces(host.id)[0].id;
     for (const o of allOfficers()) if (o.faction === fid && !o.captive) { o.city = seat; o.acted = true; }
     const wasGuest = F.guest;
+    if (!wasGuest) { F.exiles = (F.exiles || 0) + 1; if (F.exiles > 2) { log(`${F.name} has lost everything for the third time; no lord will shelter such a house again.`, 'hist'); return false; } }
     F.guest = true; F.host = host.id; F.guestSince = S.turn; F.favor = 50; F.petitionUntil = 0;
     F.household = F.household || { troops: 0, gold: 0 };
     F.household.troops += Math.floor(troops); F.household.gold += Math.floor(gold);
@@ -994,7 +995,8 @@ const Game = (() => {
         if (!seatCity || !goGuest(F.id, seatCity, null)) { notice(`The house of ${F.name}, without a protector, scatters to the winds.`, 'hist'); dissolveHouse(F.id); }
         continue;
       }
-      if (months >= 144) { notice(`After long years in exile, the followers of ${F.name} drift away and the house is no more.`, 'hist'); dissolveHouse(F.id); continue; }
+      F.exileTotal = (F.exileTotal || 0) + 1;   // counted across every host and every stint
+      if (months >= 144 || F.exileTotal >= 180) { notice(`After long years in exile, the followers of ${F.name} drift away and the house is no more.`, 'hist'); dissolveHouse(F.id); continue; }
       // the household eats from the host's granary; a big camp wears out its welcome
       F.household = F.household || { troops: 0, gold: 0 };
       const seatP = prov(hostSeat(F.id));
@@ -1159,6 +1161,7 @@ const Game = (() => {
   const canEscape = (o) => itemsOf(o.name).some((it) => it.escape);
 
   // ---------- new blood: later generations and local talents ----------
+  const TALENT_CAP = 70;
   function talentName() {
     for (let i = 0; i < 40; i++) {
       const n = `${pick(SURNAMES)} ${pick(GIVEN)}`;
@@ -1186,7 +1189,9 @@ const Game = (() => {
     // houses that have grown faster than their courts draw talent to them
     const short = Object.values(S.factions).filter((f) => f.alive && !f.raider && !f.guest && factionProvinces(f.id).length >= 2 && factionOfficers(f.id).length < factionProvinces(f.id).length * 1.2);
     const pull = short.length && living < 170 ? 0.15 : 0;
-    if (Math.random() < pull || (living < target && Math.random() < Math.min(0.9, 0.25 + (target - living) / 40))) {
+    S.generatedTalents = S.generatedTalents || 0;
+    const wellDry = S.generatedTalents >= TALENT_CAP || S.year > 245;   // the age of heroes ends: no endless supply of nameless worthies
+    if (!wellDry && (Math.random() < pull || (living < target && Math.random() < Math.min(0.9, 0.25 + (target - living) / 40)))) {
       const owned = Object.values(S.provinces).filter((p) => p.owner && !S.factions[p.owner].raider);
       // weight cities by their house's shortage of officers per city
       const weighted = owned.map((p) => { const f = S.factions[p.owner]; const ratio = factionOfficers(f.id).length / Math.max(1, factionProvinces(f.id).length); return { p, w: Math.max(0.2, 2.2 - ratio) }; });
@@ -1194,7 +1199,9 @@ const Game = (() => {
       for (const x of weighted) { r -= x.w; if (r <= 0) { p = x.p; break; } }
       const name = talentName();
       if (name) {
-        const q = (base) => clamp(Math.round(base + (Math.random() + Math.random() - 1) * 22), 20, 92);
+        S.generatedTalents++;
+        const late = S.generatedTalents > TALENT_CAP * 0.6 ? 6 : 0;   // the later worthies are lesser men
+        const q = (base) => clamp(Math.round(base - late + (Math.random() + Math.random() - 1) * 22), 20, 92);
         const kind = Math.random();
         const o = kind < 0.45 ? { ldr: q(66), war: q(70), int: q(45), pol: q(42), chr: q(52) } : kind < 0.8 ? { ldr: q(50), war: q(38), int: q(70), pol: q(72), chr: q(58) } : { ldr: q(62), war: q(58), int: q(62), pol: q(60), chr: q(64) };
         S.officers[name] = { name, ...o, faction: null, city: p.id, loyalty: 0, born: S.year - ri(20, 32), acted: false, captive: null, skills: Math.random() < 0.3 ? [pick(Object.keys(SKILL_INFO))] : [], rank: 0 };
@@ -1455,6 +1462,7 @@ const Game = (() => {
       if (leaderHouse() === from) c += has(to, 'cautious') || has(to, 'builder') ? 0.15 : -0.4;
       // a hegemon takes peace only from the desperate, or from the second power it wants to court
       const H = S.factions[to];
+      if (H.phase === 'unifying') return 0.03;   // the war of unification admits no truce
       if (H.phase && H.phase !== 'rising') { const sp = secondPower(to); if (lastFoe(to) === from && !desperate) c -= 0.6; else if (!(desperate || (sp && sp.id === from))) c -= 0.3; }
       // honourable houses remember broken words
       if (has(to, 'honourable') && (P.treachery || 0) > 0) c -= 0.15;
@@ -1586,6 +1594,12 @@ const Game = (() => {
     const foe = lastFoe(fid);
     if (foe && treatyStatus(fid, foe) !== 'neutral' && mine > totalTroops(foe) * (has(fid, 'honourable') ? 3 : 1.8) && Math.random() < 0.35) { breakTreaty(fid, foe); return; }
     const strongest = hostileN.sort((a, b) => totalTroops(b) - totalTroops(a))[0];
+    // 0. the war of unification: no envoys, no gifts, and every treaty with a weaker rival is torn up
+    if (F.phase === 'unifying') {
+      const bound = others.filter((f) => !S.factions[f].raider && treatyStatus(fid, f) !== 'neutral' && mine > totalTroops(f) * 1.5);
+      if (bound.length && Math.random() < 0.5) { const f = bound.sort((a, b) => totalTroops(b) - totalTroops(a))[0]; log(`${fname(fid)} holds half the realm and will brook no rival: the ${treatyStatus(fid, f)} with ${fname(f)} is renounced.`, 'bad'); breakTreaty(fid, f); }
+      return;
+    }
     // 0a. the hegemon courts the second power so the rest cannot unite, and asks nothing of the others
     if (F.phase && F.phase !== 'rising') {
       const sp = secondPower(fid);
@@ -1724,13 +1738,24 @@ const Game = (() => {
         if (p.owner === S.player) notice(t, 'bad'); else log(t, 'bad');
       }
       const popCap = [0, 260000, 520000, 900000][provData(p.id).tier];
-      p.pop += Math.floor(p.pop * 0.004 * (isSpring() ? 1.5 : 1) * Math.max(0, 1 - p.pop / popCap));
+      const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.4 ? Math.floor(popCap * 0.0008) : 0;   // refugees return to orderly, half-empty land
+      p.pop += Math.floor(p.pop * 0.006 * (isSpring() ? 1.5 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
       // order: a garrison and a governor keep the peace; neglect breeds revolt
       const garrisoned = p.troops >= p.pop / 60 || officersIn(p.id, p.owner).length > 0;
       const realm = factionProvinces(p.owner).length;
       const strain = realm > 16 ? Math.min(3, Math.floor((realm - 16) / 6) + 1) : 0;   // a realm past a dozen cities frays at the edges
       const cityGov = officersIn(p.id, p.owner).length > 0;
       p.order = clamp(p.order + (garrisoned ? (gov && hasSkill(gov, 'admin') ? 3 : 2) : -3) - (cityGov ? Math.max(0, strain - 1) : strain), 0, 100);
+      // encirclement: a stronghold of a house down to its last towns, with enemies on every road and a larger host outside, is cut off from supply
+      if (factionProvinces(p.owner).length <= 3 && S.adj[p.id].length) {
+        const ring = neighbors(p.id);
+        const cut = ring.every((q) => q.owner && q.owner !== p.owner && canAttack(q.owner, p.owner) && !S.factions[q.owner].raider);
+        const outside = ring.reduce((a, q) => a + q.troops, 0);
+        if (cut && outside > p.troops * 1.2) {
+          p.troops -= Math.floor(p.troops * 0.03); p.order = clamp(p.order - 2, 0, 100); p.food = Math.max(0, p.food - Math.floor(p.food * 0.03));
+          if (S.turn % 6 === 0) { const t = `${pname(p.id)} is cut off on every side; deserters slip over the walls of ${fname(p.owner)}'s last stronghold by night.`; (p.owner === S.player) ? notice(t, 'bad') : log(t, 'bad'); }
+        }
+      }
       if (p.order < 20 && Math.random() < 0.1) {
         const owner = p.owner; const refuge = factionProvinces(owner).find((q) => q.id !== p.id && S.adj[p.id].includes(q.id)) || factionProvinces(owner).find((q) => q.id !== p.id);
         for (const o of officersIn(p.id, owner)) { if (refuge) o.city = refuge.id; else { o.faction = null; o.loyalty = 0; } }
@@ -1883,6 +1908,8 @@ const Game = (() => {
     const mine = factionProvinces(fid); const n = mine.length;
     const others = Object.values(S.factions).filter((f) => f.alive && !f.raider && f.id !== fid).map((f) => factionProvinces(f.id).length);
     const second = Math.max(0, ...others);
+    const total = Object.keys(S.provinces).length;
+    if (n >= 12 && (n * 2 >= total || (n * 5 >= total * 2 && n >= second * 2.5))) { F.phase = 'unifying'; F.consolidatingSince = 0; return F.phase; }   // steamroll what is left
     const hegemon = n >= 10 && (n >= second * 1.5 || leaderHouse() === fid);
     if (!hegemon) { F.phase = 'rising'; return F.phase; }
     const avgOrder = mine.reduce((a, p) => a + p.order, 0) / Math.max(1, n);
@@ -1947,10 +1974,10 @@ const Game = (() => {
     // 2. interior cities keep a peacekeeping garrison and push the rest toward the front (or the reserve)
     for (const p of interior) {
       if (reserve && p.id === reserve.id) continue;
-      const keep = Math.max(3000, Math.floor(p.pop / 60));
+      const keep = F.phase === 'unifying' ? Math.max(1200, Math.floor(p.pop / 120)) : Math.max(3000, Math.floor(p.pop / 60));
       const spare = p.troops - keep;
       const idle = idleOfficers(p.id).filter((o) => !isRuler(o));
-      if (spare < 2500 || !idle.length || officersIn(p.id, fid).length < 2) continue;
+      if (spare < (F.phase === 'unifying' ? 800 : 2500) || !idle.length || officersIn(p.id, fid).length < (p.order >= 60 ? 1 : 2)) continue;   // a quiet interior town may be left to its magistrates
       const dest = fronts.length ? fronts.reduce((m, f) => ((threatOn(fid, f) / Math.max(1, f.troops)) > (threatOn(fid, m) / Math.max(1, m.troops)) ? f : m)) : reserve;
       if (!dest) continue;
       const hop = S.adj[p.id].includes(dest.id) ? dest.id : nextHop(fid, p.id, dest.id);
@@ -1965,6 +1992,10 @@ const Game = (() => {
       if (danger && idle.length && reserve.troops > 4000) {
         const hop = S.adj[reserve.id].includes(danger.id) ? danger.id : nextHop(fid, reserve.id, danger.id);
         if (hop) transfer(reserve.id, hop, { troops: Math.floor(reserve.troops * 0.7), officers: [idle.sort((a, b) => b.war - a.war)[0].name] });
+      } else if (!danger && idle.length && F.plan && prov(F.plan.hammer).owner === fid && F.plan.hammer !== reserve.id && reserve.troops > (F.phase === 'unifying' ? 3000 : 12000)) {
+        // no border in danger: the reserve does not sit idle but marches to the main blow (a hegemon keeps a core at home; a unifier sends nearly all)
+        const hop = S.adj[reserve.id].includes(F.plan.hammer) ? F.plan.hammer : nextHop(fid, reserve.id, F.plan.hammer);
+        if (hop) transfer(reserve.id, hop, { troops: Math.floor(reserve.troops * (F.phase === 'unifying' ? 0.8 : 0.5)), food: Math.floor(Math.max(0, reserve.food - reserve.troops * FOOD_UPKEEP * 6) * 0.4), officers: [idle.sort((a, b) => b.war - a.war)[0].name] });
       }
     }
     // 4. administrators inland, to the richest interior cities without one
@@ -2045,7 +2076,8 @@ const Game = (() => {
           score -= 0.1 * Math.max(-3, Math.min(3, co.delta));                                   // the hegemon cares even more for a tidy line
           const sp = secondPower(fid);
           if (t.owner && sp && t.owner === sp.id && totalTroops(fid) >= totalTroops(sp.id) * 2 && rulerOf(sp.id) && rulerOf(sp.id).city === t.id) score += 0.3;
-          if (t.owner && F.plan && F.plan.enemy && t.owner !== F.plan.enemy && factionProvinces(t.owner).length > 2) score -= 0.3;
+          if (F.phase !== 'unifying' && t.owner && F.plan && F.plan.enemy && t.owner !== F.plan.enemy && factionProvinces(t.owner).length > 2) score -= 0.3;
+          if (F.phase === 'unifying' && t.owner) score += 0.2 + 0.4 / Math.max(1, factionProvinces(t.owner).length);   // finish the small ones, then the rest
           if (F.phase === 'consolidating' && t.owner && factionProvinces(t.owner).length > 2) score -= 0.6;   // digest first
         }
         if (!best || score > best.score) best = { enemy: t.owner, hammer: p.id, target: t.id, score, ratio, since: S.turn };
@@ -2084,7 +2116,7 @@ const Game = (() => {
     if (phase !== 'rising') aiHegemon(fid);
     const plan = makePlan(fid);
     if (!plan) { if (!F.idleSince) F.idleSince = S.turn; } else F.idleSince = 0;   // months with nothing to attack: see aiDiplomacy
-    const th = baseThreshold(fid) * (F.caution || 1) * (diff() === 'hard' ? 0.95 : diff() === 'easy' ? 1.1 : 1) * Math.min(1.3, 1 + 0.015 * overextension(fid));
+    const th = phase === 'unifying' ? 1.1 * (diff() === 'hard' ? 0.95 : diff() === 'easy' ? 1.1 : 1) : baseThreshold(fid) * (F.caution || 1) * (diff() === 'hard' ? 0.95 : diff() === 'easy' ? 1.1 : 1) * Math.min(1.3, 1 + 0.015 * overextension(fid));
     const provs = factionProvinces(fid);
     const aiTactics = (H, T, party) => { const bestInt = Math.max(...party.map((o) => o.int)); const ratio = attStrength(H.troops * 0.7, party, H) / Math.max(1, defStrength(T)); const stance = T.defense >= 350 && (partyHas(party, 'siege') || ratio < 1.6) ? 'siege' : ratio >= 1.8 ? 'assault' : bestInt >= 85 ? 'feint' : 'standard'; const m = battleModifiers(H.id, T.id); const lowLoy = T.owner && officersIn(T.id, T.owner).some((o) => !isRuler(o) && o.loyalty < 60); const stratagem = bestInt < 75 ? 'auto' : lowLoy && has(fid, 'schemer') ? 'discord' : m.type === 'river' && (H.fleet || 0) >= 40 ? 'flood' : !isWinter() && bestInt >= 80 ? 'fire' : 'auto'; return { stance, stratagem }; };
 
@@ -2124,7 +2156,7 @@ const Game = (() => {
       const m = battleModifiers(H.id, T.id);
       const need = (defStrength(T) * m.def * th) / (m.att * (1 - m.loss));
       const party = aiParty(H.id);
-      const keepHome = neighbors(H.id).filter((n) => n.owner && hostile(n)).length > 1 ? 0.35 : 0.2;
+      const keepHome = phase === 'unifying' ? 0.15 : neighbors(H.id).filter((n) => n.owner && hostile(n)).length > 1 ? 0.35 : 0.2;
       const send = Math.floor(H.troops * (1 - keepHome));
       const smallPrey = !T.owner || factionProvinces(T.owner).length <= 2 || T.owner === lastFoe(fid);
       const ready = party.length && send >= 3000 && attStrength(send, party, H) > need && H.food > send * 0.15 && !(phase === 'consolidating' && !smallPrey);
@@ -2134,10 +2166,10 @@ const Game = (() => {
         for (const d of factionProvinces(fid)) {
           if (d.id === H.id) continue;
           const idle = idleOfficers(d.id).filter((o) => !isRuler(o));
-          if (!idle.length || officersIn(d.id, fid).length < 2) continue;
+          if (!idle.length || officersIn(d.id, fid).length < (phase !== 'rising' && !isFront(fid, d) && d.order >= 60 ? 1 : 2)) continue;
           const hop = S.adj[d.id].includes(H.id) ? H.id : nextHop(fid, d.id, H.id);
           if (!hop) continue;
-          const spare = isFront(fid, d) ? spareTroops(fid, d) : Math.max(0, d.troops - 2500);
+          const spare = isFront(fid, d) ? spareTroops(fid, d) : Math.max(0, d.troops - (phase === 'unifying' ? 1200 : 2500));
           if (spare < 2000) continue;
           const escort = idle.reduce((mm, o) => (o.war > mm.war ? o : mm));
           const keepGov = governorOf(d); if (keepGov && keepGov.name === escort.name && idle.length < 2) continue;
@@ -2151,10 +2183,10 @@ const Game = (() => {
       for (const t of neighbors(p.id).filter(hostile)) {
         const party = aiParty(p.id); if (!party.length) break;
         const m = battleModifiers(p.id, t.id); if (m.blocked) continue;
-        const send = Math.floor(p.troops * 0.65);
+        const send = Math.floor(p.troops * (phase === 'unifying' ? 0.75 : 0.65));
         const bonus = t.owner && S.turn - (S.factions[t.owner].lastLoss || -99) <= 6 ? 0.85 : 1;
-        const bar = F.raider ? 1 : cohesionBar(cohesion(fid, t, comps));
-        if (send >= 3000 && attStrength(send * (1 - m.loss), party, p) * m.att > defStrength(t) * m.def * th * 1.2 * bonus * bar && p.food > send * 0.15) { attack(p.id, t.id, party.map((o) => o.name), send, aiTactics(p, t, party)); attacked.add(p.id); break; }
+        const bar = F.raider ? 1 : phase === 'unifying' ? 0.9 : 1.2 * cohesionBar(cohesion(fid, t, comps));
+        if (send >= 3000 && attStrength(send * (1 - m.loss), party, p) * m.att > defStrength(t) * m.def * th * bonus * bar && p.food > send * 0.15) { attack(p.id, t.id, party.map((o) => o.name), send, aiTactics(p, t, party)); attacked.add(p.id); break; }
       }
     }
 
