@@ -3,8 +3,9 @@
 //  Coastlines, rivers and lakes come from Natural Earth (public
 //  domain) via js/geo.js, already projected to the canvas by
 //  tools/buildmap.js with the MAP projection in js/data.js.
-//  Mountain ranges, the steppe, the Great Wall and labels are
-//  placed here by longitude/latitude and projected the same way.
+//  Relief comes from real elevation data rendered by tools/buildrelief.js
+//  (img/relief.png). The steppe, the Great Wall and labels are placed
+//  here by longitude/latitude and projected the same way.
 //  Also exposes isSea(x, y) for territory shading.
 // ============================================================
 
@@ -17,28 +18,6 @@ const TERRAIN = (() => {
   let seed = 20250904;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const pts = (arr) => arr.map((p) => `${f1(p[0])},${f1(p[1])}`).join(' ');
-
-  // Mountain ranges: from -> to (lon/lat), count, glyph size
-  const RANGES = [
-    { a: [100.6, 39.0], b: [102.6, 37.6], n: 8, s: 9 },      // Qilian
-    { a: [105.6, 34.0], b: [110.8, 33.6], n: 16, s: 10 },    // Qinling
-    { a: [107.4, 32.3], b: [110.0, 32.0], n: 8, s: 9 },      // Daba
-    { a: [109.6, 30.7], b: [110.6, 31.3], n: 5, s: 8 },      // Wu Mountains, the gorges
-    { a: [113.3, 38.0], b: [113.9, 36.3], n: 6, s: 7 },      // Taihang
-    { a: [115.6, 40.7], b: [119.2, 40.6], n: 9, s: 8 },      // Yan Mountains
-    { a: [115.3, 31.4], b: [116.6, 31.1], n: 5, s: 7 },      // Dabie
-    { a: [110.2, 25.3], b: [112.5, 25.3], n: 7, s: 8 },      // Nanling (west)
-    { a: [113.4, 25.2], b: [115.4, 25.0], n: 6, s: 8 },      // Nanling (east)
-    { a: [117.0, 27.6], b: [118.5, 25.9], n: 7, s: 9 },      // Wuyi
-    { a: [101.6, 27.2], b: [103.0, 26.1], n: 6, s: 9 },      // Yunnan plateau
-    { a: [103.6, 24.7], b: [105.6, 24.1], n: 6, s: 9 },
-    { a: [108.4, 28.6], b: [110.0, 27.6], n: 5, s: 8 },      // Wuling range
-    { a: [108.0, 41.3], b: [112.6, 41.0], n: 6, s: 7 },      // Yinshan
-    { a: [117.0, 36.3], b: [117.3, 36.1], n: 2, s: 8 },      // Mount Tai
-    { a: [124.6, 42.1], b: [125.5, 41.2], n: 4, s: 8 },      // Changbai
-    { a: [103.2, 33.4], b: [104.6, 32.2], n: 5, s: 9 },      // Min Mountains, west of the Shu basin
-  ].map((r) => ({ a: P(...r.a), b: P(...r.b), n: r.n, s: r.s }));
-  const PLATEAU = (() => { const [x0, y0] = P(100.5, 37.0), [x1, y1] = P(102.4, 29.0); return { x0, y0, x1, y1, n: 22, s: 12 }; })();
 
   // The Great Wall of the Han, roughly, from the Hexi corridor to Liaodong
   const WALL = [[100.6, 39.9], [103.6, 38.6], [105.9, 37.5], [107.6, 37.9], [109.7, 39.4], [111.6, 40.2], [113.9, 40.5], [116.0, 40.6], [118.2, 40.5], [119.9, 40.3], [121.4, 41.0], [123.0, 41.6]].map((c) => P(...c));
@@ -54,30 +33,6 @@ const TERRAIN = (() => {
     ['Great Wall', 110.5, 39.9, -3, 10], ['Gobi', 104.0, 41.9, 0, 13], ['Tibetan Plateau', 101.0, 33.0, -74, 13], ['Liaodong', 122.7, 40.2, 0, 10],
     ['Dongting', 112.8, 29.15, 0, 8], ['Poyang', 116.3, 29.0, 0, 8], ['Taihu', 120.2, 31.15, 0, 7], ['Shu', 104.6, 30.2, 0, 11],
   ];
-
-  function mountain(x, y, s) {
-    const h = s * (0.8 + rnd() * 0.5), w = s * (0.9 + rnd() * 0.4);
-    const x1 = x - w, x2 = x + w, yb = y + h * 0.45, yt = y - h * 0.55;
-    return `<path d="M${x1.toFixed(1)},${yb.toFixed(1)} L${x.toFixed(1)},${yt.toFixed(1)} L${x2.toFixed(1)},${yb.toFixed(1)} Z" class="mtn"/>` +
-      `<path d="M${x.toFixed(1)},${yt.toFixed(1)} L${x2.toFixed(1)},${yb.toFixed(1)} L${(x + w * 0.25).toFixed(1)},${yb.toFixed(1)} Z" class="mtn-lit"/>`;
-  }
-  function range(r) {
-    let out = '';
-    const dx = r.b[0] - r.a[0], dy = r.b[1] - r.a[1];
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    for (let i = 0; i < r.n; i++) {
-      const t = (i + 0.5) / r.n + (rnd() - 0.5) * 0.06;
-      const off = (rnd() - 0.5) * r.s * 1.6;
-      out += mountain(r.a[0] + dx * t + nx * off, r.a[1] + dy * t + ny * off, r.s);
-    }
-    return out;
-  }
-  function plateau(p) {
-    let out = '';
-    for (let i = 0; i < p.n; i++) out += mountain(p.x0 + rnd() * (p.x1 - p.x0), p.y0 + rnd() * (p.y1 - p.y0), p.s * (0.7 + rnd() * 0.6));
-    return out;
-  }
 
   // Smooth a polyline with quadratic curves through segment midpoints; endpoints are exact. Used for roads.
   function smoothPath(p) {
@@ -126,7 +81,6 @@ const TERRAIN = (() => {
 
   function svg() {
     seed = 20250904;
-    const [sx, sy] = P(113.5, 26.0), [bx, by] = P(105.0, 30.6);
     return `
       <defs>
         <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
@@ -149,13 +103,10 @@ const TERRAIN = (() => {
       <path d="${LAND_PATH}" fill="none" stroke="#8fc3dc" stroke-width="12" opacity="0.28" filter="url(#coastGlow)"/>
       <path d="${LAND_PATH}" fill="url(#landGrad)"/>
       <g clip-path="url(#landClip)">
-        <polygon points="${pts(STEPPE)}" fill="#4a4030" opacity="0.75"/>
-        <polygon points="${pts(STEPPE)}" fill="url(#dunes)"/>
-        <ellipse cx="${f1(sx)}" cy="${f1(sy)}" rx="420" ry="200" fill="#2f5a34" opacity="0.18"/>
-        <ellipse cx="${f1(bx)}" cy="${f1(by)}" rx="130" ry="110" fill="#3f6a3a" opacity="0.14"/>
+        <image href="img/relief.png" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>
+        <polygon points="${pts(STEPPE)}" fill="url(#dunes)" opacity="0.7"/>
       </g>
       <g id="territory-slot"></g>
-      <g class="mountains">${RANGES.map(range).join('')}${plateau(PLATEAU)}</g>
       <g class="rivers">${GEO.rivers.filter((r) => !r.lake).map(river).join('')}${GEO.lakes.map((l) => `<path d="${polyPath(l.pts)}" class="lake"/>`).join('')}</g>
       <path d="${LAND_PATH}" class="coast"/>
       <polyline points="${pts(WALL)}" class="wall"/>

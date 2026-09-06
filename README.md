@@ -13,9 +13,18 @@ coastline and the 10m rivers and lakes, clipped to a window on China from
 Bohai, the Shandong and Liaodong peninsulas, Hainan and Taiwan, the Yellow
 River's Ordos loop, the Wei, Fen, Han, Huai, Yangtze, Jialing, Min, Xiang, Gan,
 Xi and Liao rivers and some sixty smaller ones, and Dongting, Poyang, Tai,
-Hongze and Chao lakes in their true shapes. Mountain ranges, the Tibetan
-plateau, the Gobi steppe, the Great Wall and the sea labels are placed by
-longitude and latitude in `js/terrain.js`.
+Hongze and Chao lakes in their true shapes.
+
+The terrain itself is real too. `img/relief.png` is a hillshaded relief built
+from elevation data (the Mapzen Terrarium tiles on AWS Open Data, which derive
+from SRTM, GMTED and ETOPO1) by `tools/buildrelief.js`: the tiles are
+reprojected into the game's projection, lit from the north-west with vertical
+exaggeration so that hills read at this scale, and tinted by height in the
+game's palette from green-olive lowland through olive-brown hills to the pale
+grey of the Tibetan plateau. The Sichuan basin, the Loess plateau, the Qinling,
+Taihang, Nanling and Wuyi ranges and the Yunnan highlands all appear where they
+really are. The Gobi steppe pattern, the Great Wall and the sea and range labels
+are placed by longitude and latitude in `js/terrain.js`.
 
 Every city carries the real longitude and latitude of its historical seat
 (Chang'an at Xi'an, Ye near Handan, Jianye at Nanjing, Jiaozhi at Hanoi, and so
@@ -26,8 +35,10 @@ and use the buttons in the corner to zoom or refit. The terrain is drawn once;
 only cities and roads redraw each turn.
 
 To rebuild the geography (for example after changing the projection in
-`MAP`), run `node tools/buildmap.js`; it downloads the three Natural Earth
-GeoJSON files into `tools/naturalearth/` on first use and writes `js/geo.js`.
+`MAP`), run `node tools/buildmap.js`, which downloads the three Natural Earth
+GeoJSON files into `tools/naturalearth/` on first use and writes `js/geo.js`,
+and `node tools/buildrelief.js`, which fetches a hundred elevation tiles into
+`tools/relief-tiles/` and writes `img/relief.png`. Neither needs any package.
 
 Cities span from Xiangping in Liaodong to Jiaozhi on the Gulf of Tonkin, with
 passes such as Hongnong, Shangyong, Zitong and Yong'an guarding the routes
@@ -490,6 +501,8 @@ era run uninterrupted.
 | `js/geo.js` | Generated: Natural Earth coastline, rivers and lakes in canvas coordinates |
 | `js/terrain.js` | Static map background drawn from `geo.js` plus mountains, steppe, wall and labels |
 | `tools/buildmap.js` | Rebuilds `js/geo.js` from Natural Earth data |
+| `img/relief.png` | Generated: hillshaded elevation relief of the map window |
+| `tools/buildrelief.js` | Rebuilds `img/relief.png` from open elevation tiles |
 | `js/game.js` | Engine: state, commands, battles, economy, AI, save/load |
 | `js/ui.js` | Map rendering, panels, dialogs |
 | `tools/sim.js` | Headless multi-year simulation for balance testing |
