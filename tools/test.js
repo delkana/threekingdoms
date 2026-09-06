@@ -91,15 +91,15 @@ test('tactical battle: sieges resolve within four months and reach the map; play
   assert(G.Game.battleAutoMonth('xuchang').ok, 'auto month');
 });
 test('champions, letters, ransom and favours: duels and defections happen in sieges; favours are owed and repaid', () => {
-  let duels = 0, letters = 0, lines = 0;
-  for (let i = 0; i < 12; i++) {
-    G.Game.newGame(null); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 200000; S.provinces.chenliu.gold = 3000; S.provinces.xuchang.owner = 'yuanshu'; S.provinces.xuchang.troops = 12000; S.provinces.xuchang.gold = 3000;
-    const ys = G.Game.factionOfficers('yuanshu').filter((o) => !G.Game.isRuler(o)).slice(0, 3); for (const o of ys) { o.city = 'xuchang'; o.acted = false; o.loyalty = 50; }
-    for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
-    const r = G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 25000); assert(r.ok && r.report, 'battle');
-    for (const l of r.report.lines) { lines++; if (/crosses arms|declines/.test(l.text)) duels++; if (/letters/.test(l.text)) letters++; }
-  }
-  assert(duels >= 1, `duels or challenges ${duels} in ${lines} lines`); assert(letters >= 1, `letters ${letters}`);
+  // a deliberate challenge and deliberate letters, so the check does not lean on the AI's dice
+  G.Game.newGame('caocao'); const S0 = G.Game.state(); S0.provinces.chenliu.troops = 30000; S0.provinces.chenliu.food = 99999; S0.provinces.chenliu.gold = 3000; S0.provinces.xuchang.owner = 'yuanshu'; S0.provinces.xuchang.troops = 12000;
+  const ys0 = G.Game.factionOfficers('yuanshu').filter((o) => !G.Game.isRuler(o)).slice(0, 2); for (const o of ys0) { o.city = 'xuchang'; o.acted = false; o.loyalty = 40; }
+  for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+  assert(G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren'], 21000).ok, 'player battle'); const B0 = S0.battles.xuchang; G.Game.battleBeginDay('xuchang');
+  const u = B0.units.find((x) => x.side === 'A' && x.officers.length), v = B0.units.find((x) => x.side === 'D' && x.officers.length);
+  const nb = G.BATTLE.neighbours(v.c, v.r, 13, 12).find(([c, r]) => !B0.units.some((x) => x.c === c && x.r === r) && !'CWG~lr'.includes(G.HEXMAPS.xuchang.terrain[r * 13 + c])); u.c = nb[0]; u.r = nb[1];
+  assert(G.Game.battleAttack('xuchang', u.id, v.id, { duel: true }).ok, 'challenge'); assert(B0.log.some((l) => /crosses arms|declines/.test(l.text)), 'a duel or a refusal is logged');
+  const ts = G.Game.battleSubornTargets('xuchang'); assert(ts.length >= 1, 'letters may be written to the wavering'); const sb = G.Game.battleSuborn('xuchang', ts[0].unit, ts[0].name, 300); assert(sb.ok && B0.log.some((l) => /letters/.test(l.text)), 'letters logged');
   // favours: an ally who marches is owed one; a gift of 400 repays it
   G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 99999; S.provinces.xuchang.owner = 'yuanshu'; S.provinces.xuchang.troops = 9000; S.provinces.runan.owner = 'sunjian'; S.provinces.runan.troops = 20000;
   const sj = G.Game.factionOfficers('sunjian').filter((o) => !G.Game.isRuler(o)).slice(0, 2); for (const o of sj) { o.city = 'runan'; o.acted = false; }
