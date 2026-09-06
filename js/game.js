@@ -1880,8 +1880,10 @@ const Game = (() => {
     a.troops -= troops;
     const exit = battleExitToward(toId, fromId);
     const defOfficers = defF ? officersIn(toId, defF).map((o) => o.name) : [];
+    const mods = battleModifiers(fromId, toId);
     const B = BATTLE.create({ city: toId, attF, defF, fromCity: fromId, troops, food: Math.floor(troops * 0.1), officers: officerNames, training: a.training, walls: b.defense, exit,
-      cityTroops: b.troops, cityOfficers: defOfficers, cityTraining: b.training, control: { A: attF === S.player ? 'player' : 'ai', D: defF === S.player ? 'player' : 'ai' }, ctx: battleCtx({ city: toId }), record: !!(S.observer && S.options && S.options.watchBattles) });
+      cityTroops: b.troops, cityOfficers: defOfficers, cityTraining: b.training, control: { A: attF === S.player ? 'player' : 'ai', D: defF === S.player ? 'player' : 'ai' }, ctx: battleCtx({ city: toId }), record: !!(S.observer && S.options && S.options.watchBattles),
+      fleet: mods.frozen ? 0 : (a.fleet || 0), cityFleet: mods.frozen ? 0 : (b.fleet || 0) });
     B.tactics = tactics || {}; B.startD = b.troops; B.att.officers = [...officerNames]; B.def.officers = [...defOfficers]; B.phase = 'idle';
     S.battles[toId] = B;
     if (attF !== S.player) aiCallReinforcements(B, 'A');
@@ -1912,7 +1914,7 @@ const Game = (() => {
       const idle = idleOfficers(n).filter((o) => !isRuler(o)).sort((x, y) => y.war - x.war); const escort = idle[0];
       if (!escort) continue;
       escort.acted = true; p.troops -= send; const food = Math.min(p.food, Math.floor(send * 0.1)); p.food -= food;
-      BATTLE.addArrival(B, { side, fid: p.owner, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(B.city, n) });
+      BATTLE.addArrival(B, { side, fid: p.owner, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(B.city, n), fleet: p.fleet || 0 });
       BATTLE.log(B, `${fname(p.owner)} sends ${fmt(send)} men from ${pname(n)} to ${side === 'A' ? 'join the siege' : 'relieve the city'}.`, side === 'A' ? 'att' : 'def');
       if (!own) { shiftRelation(fid, p.owner, 5); addFavor(fid, p.owner, `aid at ${pname(B.city)}`); }
     }
@@ -1934,7 +1936,7 @@ const Game = (() => {
       const troops = Math.max(0, Math.min(p.troops, Math.floor(r.troops || 0))), food = Math.max(0, Math.min(p.food, Math.floor(r.food || 0)));
       if (troops <= 0) continue; const o = r.officer ? off(r.officer) : null; if (!o || o.city !== r.city || o.acted || o.faction !== fid) continue;
       o.acted = true; p.troops -= troops; p.food -= food;
-      BATTLE.addArrival(B, { side, fid, from: r.city, troops, food, officers: [o.name], training: p.training, days: days(), exit: battleExitToward(city, r.city) });
+      BATTLE.addArrival(B, { side, fid, from: r.city, troops, food, officers: [o.name], training: p.training, days: days(), exit: battleExitToward(city, r.city), fleet: p.fleet || 0 });
       sent.push(`${fmt(troops)} from ${pname(r.city)}`);
     }
     for (const af of allies) {
@@ -1945,7 +1947,7 @@ const Game = (() => {
       const n = cities.sort((x, y) => prov(y).troops - prov(x).troops)[0]; const p = prov(n); const send = Math.floor(p.troops * 0.3); if (send < 1000) continue;
       const idle = idleOfficers(n).filter((o) => !isRuler(o)).sort((x, y) => y.war - x.war); const escort = idle[0]; if (!escort) continue;
       escort.acted = true; p.troops -= send; const food = Math.min(p.food, Math.floor(send * 0.1)); p.food -= food;
-      BATTLE.addArrival(B, { side, fid: af, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(city, n) });
+      BATTLE.addArrival(B, { side, fid: af, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(city, n), fleet: p.fleet || 0 });
       shiftRelation(fid, af, 5); addFavor(fid, af, `aid at ${pname(city)}`); sent.push(`${fmt(send)} from ${fname(af)}`);
     }
     B[side === 'A' ? 'att' : 'def'].asked = true;
@@ -1966,7 +1968,7 @@ const Game = (() => {
     p.troops -= troops; p.food -= food;
     const house = side === 'A' ? B.attF : B.defF;
     if (p.owner !== house) { B.helpers = B.helpers || {}; if (!B.helpers[p.owner]) { B.helpers[p.owner] = true; shiftRelation(house, p.owner, 5); addFavor(house, p.owner, `aid at ${pname(city)}`); } if (p.owner === S.player) S.pendingAid = (S.pendingAid || []).filter((a) => a.city !== city); }
-    BATTLE.addArrival(B, { side, fid: p.owner, from: fromId, troops, food, officers, training: p.training, days: ri(1, 10), exit: battleExitToward(city, fromId) });
+    BATTLE.addArrival(B, { side, fid: p.owner, from: fromId, troops, food, officers, training: p.training, days: ri(1, 10), exit: battleExitToward(city, fromId), fleet: p.fleet || 0 });
     BATTLE.log(B, `${fname(p.owner)} sends ${troops ? fmt(troops) + ' men' : 'a grain train'}${food ? ` and ${fmt(food)} food` : ''} from ${pname(fromId)}.`, side === 'A' ? 'att' : 'def');
     return ok(`The column leaves ${pname(fromId)} for ${pname(city)} and will arrive within ten days.`);
   }

@@ -483,6 +483,8 @@ kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); 
 .unit-token.sel .unit { stroke: #fff; stroke-width: 2.2; }
 .unit-token.acted { opacity: 0.6; }
 .unit-token { cursor: pointer; }
+.unit-token .hull { fill: #3a2a16; stroke: #d9c08a; stroke-width: 0.8; } .unit-token .sail { fill: #f0e6d0; stroke: #3a2a16; stroke-width: 0.6; }
+.unit-token.naval .unit { stroke: #cfe6f0; stroke-dasharray: 3 2; }
 .unit-n { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .unit-o { font-family: var(--serif); fill: rgba(255,255,255,0.9); text-shadow: 0 1px 2px #000; pointer-events: none; }
 .hl { cursor: pointer; stroke-width: 1.4; }

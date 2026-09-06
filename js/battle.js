@@ -40,9 +40,9 @@ const BATTLE = (() => {
 
   // Terrain rules for the hex maps: movement points to enter, defence modifier, blocks line of sight, cavalry may charge through.
   const TERRAIN = {
-    '~': { name: 'Sea',      move: null, def: 0,     los: false, charge: false, note: 'Impassable; ships only.' },
-    'l': { name: 'Lake',     move: null, def: 0,     los: false, charge: false, note: 'Impassable.' },
-    'r': { name: 'River',    move: null, def: 0,     los: false, charge: false, note: 'Crossed only at bridges and fords; a unit attacked while crossing fights at half strength.' },
+    '~': { name: 'Sea',      move: null, def: -0.50, los: false, charge: false, note: 'Ships sail it; foot and horse may swim across only with a full day’s movement, and men in the water fight at half strength and are easy prey.' },
+    'l': { name: 'Lake',     move: null, def: -0.50, los: false, charge: false, note: 'Ships sail it; foot and horse may swim across only with a full day’s movement, and men in the water fight at half strength and are easy prey.' },
+    'r': { name: 'River',    move: null, def: -0.50, los: false, charge: false, note: 'Ships sail it; foot and horse may ford it only with a full day’s movement, fighting at half strength and easy prey while in the water.' },
     's': { name: 'Stream',   move: 2,    def: -0.10, los: false, charge: false, note: 'Fordable everywhere but slow; no charge across it.' },
     'm': { name: 'Mountain', move: null, def: 0,     los: true,  charge: false, note: 'Impassable except along a road (3 points, no charge).' },
     'h': { name: 'Hills',    move: 2,    def: 0.25,  los: true,  charge: false, note: 'Higher ground: archers on hills shoot one hex further.' },
@@ -79,6 +79,19 @@ const BATTLE = (() => {
   }
   // Attackers deploy around the exit their road leaves by: the exit hex first, then outward from it along
   // standable ground, staying at least three hexes from the walls.
+  // navigable water: sea, lakes and the great rivers (streams are too shallow for warships)
+  const NAV = '~lr';
+  const navigable = (t) => NAV.includes(t);
+  // ships take the water hexes nearest to `near` (the attacker's exit, or the city for its own fleet)
+  function deployNaval(map, near, units, taken = new Set()) {
+    const water = [];
+    for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) if (navigable(map.terrain[r * map.w + c]) && !taken.has(`${c},${r}`)) water.push([c, r]);
+    water.sort((a, b) => hexDist(a[0], a[1], near.c, near.r) - hexDist(b[0], b[1], near.c, near.r));
+    return water.slice(0, units.length).map(([c, r], i) => ({ c, r, troops: units[i] }));
+  }
+  const navalHexes = (map) => { let n = 0; for (const t of map.terrain) if (navigable(t)) n++; return n; };
+  // how many men a city's fleet can carry: the fleet rating is a 0-100 measure of its warships
+  const fleetCapacity = (fleet) => Math.floor((fleet || 0) * 250);
   function deployAttacker(map, exit, units) {
     const at = (c, r) => map.terrain[r * map.w + c];
     const seen = new Set([`${exit.c},${exit.r}`]); const queue = [[exit.c, exit.r]]; const order = [];
@@ -115,6 +128,12 @@ const BATTLE = (() => {
     const t = terrainAt(B, c, r); if (t === null) return null;
     const road = roadAt(B, c, r); const rule = TERRAIN[t];
     if (unitAt(B, c, r)) return null;   // occupied
+    if (u.naval) {   // ships: one point per water hex; a landing on a free shore hex outside the walls ends the day's movement
+      if (navigable(t)) return 1;
+      if (insideWalls(t) || !standable(t, road)) return null;
+      return u.mp;   // the whole remaining movement, so a landing is always the last step
+    }
+    if (navigable(t) && !road) return u.mp === MP_PER_DAY ? MP_PER_DAY : null;   // fording or swimming takes the whole day
     if (t === 'W') { if (u.side === 'D') return 1; return anyGateOpen(B) ? 2 : null; }
     if (t === 'C') { if (u.side === 'D') return 1; return anyGateOpen(B) ? 1 : null; }
     if (t === 'G') { if (u.side === 'D') return 1; return gateOpen(B, c, r) ? 2 : null; }   // a barred gate must be rammed open first
@@ -128,6 +147,7 @@ const BATTLE = (() => {
     while (open.length) {
       open.sort((a, b) => a[0] - b[0]); const [cost, c, r] = open.shift();
       if (cost > (dist[key(c, r)] || { cost: 1e9 }).cost) continue;
+      if (u.naval && cost > 0 && !navigable(terrainAt(B, c, r))) continue;   // a landed ship's men go no further today
       for (const [nc, nr] of neighbours(c, r, m.w, m.h)) {
         const step = enterCost(B, u, nc, nr); if (step === null) continue;
         const nc2 = cost + step; if (nc2 > maxCost) continue;
@@ -142,10 +162,10 @@ const BATTLE = (() => {
   function strength(B, u, ctx) {
     const offs = u.officers.map((n) => ctx.officer(n)).filter((o) => o && !(B.wounded && B.wounded[o.name]));
     const war = bestStat(u, offs, 'war', 40), ldr = bestStat(u, offs, 'ldr', 40);
-    return u.troops * (0.5 + war / 100) * (0.7 + ldr / 250) * (0.7 + u.training / 300) * (0.6 + 0.4 * u.morale / 100);
+    return u.troops * (0.5 + war / 100) * (0.7 + ldr / 250) * (0.7 + u.training / 300) * (0.6 + 0.4 * u.morale / 100) * (u.naval ? 0.7 + (u.fleet || 0) / 200 : 1);
   }
   function defenceBonus(B, u) {
-    const t = terrainAt(B, u.c, u.r); let b = TERRAIN[t].def;
+    const t = terrainAt(B, u.c, u.r); let b = u.naval ? 0.15 : TERRAIN[t].def;   // water's -0.50 applies to men in it, never to ships
     if (t === 'G' && gateOpen(B, u.c, u.r)) b = 0;   // a broken gate shelters no one
     if (u.side === 'D' && 'WG'.includes(t)) b += Math.min(0.4, (B.walls || 0) / 1000);   // the city's walls add to the ring
     return b;
@@ -153,7 +173,7 @@ const BATTLE = (() => {
   const sideUnits = (B, side) => B.units.filter((u) => u.side === side);
   const sidePower = (B, side, ctx) => sideUnits(B, side).reduce((a, u) => a + strength(B, u, ctx), 0);
   const sideTroops = (B, side) => sideUnits(B, side).reduce((a, u) => a + u.troops, 0);
-  const label = (u, ctx) => (u.officers.length ? `${u.officers[0]}'s column` : ctx && ctx.fname && u.fid ? `an unled column of ${ctx.fname(u.fid)}` : u.side === 'A' ? 'an unled attacking column' : 'unled men of the garrison');
+  const label = (u, ctx) => (u.officers.length ? `${u.officers[0]}'s ${u.naval ? 'ships' : 'column'}` : ctx && ctx.fname && u.fid ? `${u.naval ? 'a squadron' : 'an unled column'} of ${ctx.fname(u.fid)}` : u.side === 'A' ? (u.naval ? 'an attacking squadron' : 'an unled attacking column') : (u.naval ? 'boats of the garrison' : 'unled men of the garrison'));
   const PLACE = { G: 'at the gate', W: 'on the walls', C: 'in the city', h: 'on the hills', m: 'in the mountains', f: 'in the woods', w: 'in the marsh', a: 'in the fields', s: 'by the stream', r: 'at the river' };
   const place = (B, c, r) => PLACE[terrainAt(B, c, r)] || 'on the plain';
   function log(B, text, cls = '') { B.log.push({ day: B.day, text, cls }); if (B.log.length > 400) B.log.shift(); }
@@ -175,7 +195,9 @@ const BATTLE = (() => {
   // one unit strikes another; the defender strikes back at reduced weight
   function fight(B, u, v, ctx, ranged = false) {
     const tu = terrainAt(B, u.c, u.r), tv = terrainAt(B, v.c, v.r);
-    let pu = strength(B, u, ctx) * ('rsl~'.includes(tu) ? 0.5 : 1);
+    let pu = strength(B, u, ctx) * (!u.naval && 'rsl~'.includes(tu) ? 0.5 : 1);
+    if (!u.naval && v.naval) pu *= 0.6;   // men on the bank against boats
+    if (u.naval && !v.naval && !ranged) pu *= 0.85;   // marines fighting from the boats
     if (tv === 'G' && !gateOpen(B, v.c, v.r) && !ranged) pu *= 0.7;   // storming a held gate is hard
     if (ranged) pu *= 0.35;
     const pv = strength(B, v, ctx) * (1 + defenceBonus(B, v));
@@ -290,6 +312,7 @@ const BATTLE = (() => {
   function moveUnit(B, u, c, r) {
     const d = reach(B, u, u.mp)[key(c, r)]; if (!d || d.cost === 0) return false;
     u.c = c; u.r = r; u.mp -= d.cost;
+    if (u.naval && !navigable(terrainAt(B, c, r))) { u.naval = false; u.mp = 0; log(B, `${label(u)} lands ${place(B, c, r)}.`, u.side === 'A' ? 'att' : 'def'); }
     return true;
   }
   // an attacker beside a barred, unheld gate spends its action on the ram
@@ -304,10 +327,10 @@ const BATTLE = (() => {
     if (u.acted || u.side === v.side) return false;
     const dist = hexDist(u.c, u.r, v.c, v.r);
     if (dist === 1) { if (opts.duel && canChallenge(B, u, v, ctx)) { challengeNow(B, u, v, ctx); if (!B.units.includes(u) || !B.units.includes(v) || u.acted) return true; } fight(B, u, v, ctx); return true; }
-    if (dist <= VOLLEY_RANGE && 'WGh'.includes(terrainAt(B, u.c, u.r))) { fight(B, u, v, ctx, true); return true; }
+    if (dist <= VOLLEY_RANGE && (u.naval || 'WGh'.includes(terrainAt(B, u.c, u.r)))) { fight(B, u, v, ctx, true); return true; }
     return false;
   }
-  const targetsFor = (B, u) => B.units.filter((v) => v.side !== u.side && (hexDist(u.c, u.r, v.c, v.r) === 1 || (hexDist(u.c, u.r, v.c, v.r) <= VOLLEY_RANGE && 'WGh'.includes(terrainAt(B, u.c, u.r)))));
+  const targetsFor = (B, u) => B.units.filter((v) => v.side !== u.side && (hexDist(u.c, u.r, v.c, v.r) === 1 || (hexDist(u.c, u.r, v.c, v.r) <= VOLLEY_RANGE && (u.naval || 'WGh'.includes(terrainAt(B, u.c, u.r))))));
 
   // shortest path (ignoring the day's MP) toward any of the goal hexes; returns the first step's key or null
   function stepToward(B, u, goals) {
@@ -318,6 +341,23 @@ const BATTLE = (() => {
     let cur = best, last = null;
     while (cur && cur.prev) { if (cur.cost <= u.mp) { last = cur; break; } cur = dist[cur.prev]; }
     return last ? key(last.c, last.r) : null;
+  }
+  // a ship's day: shoot or board what is in reach; attackers sail for the shore nearest the walls and land there, defenders hold the water
+  function aiShip(B, u, side, ctx, gates, centre) {
+    const m = HEXMAPS[B.city];
+    const targets = targetsFor(B, u).sort((a, b) => strength(B, a, ctx) - strength(B, b, ctx));
+    const adjacent = targets.filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1);
+    if (adjacent.length && strength(B, u, ctx) >= strength(B, adjacent[0], ctx) * (1 + defenceBonus(B, adjacent[0])) * 0.8) { melee(B, u, adjacent[0], ctx); return; }
+    if (targets.length) { fight(B, u, targets[0], ctx, true); return; }
+    if (side === 'D') return;   // the garrison's boats keep station
+    // land where the shore is nearest the walls, once within a few hexes of it; otherwise sail on toward it
+    const shore = []; for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) { const t = m.terrain[r * m.w + c]; if (!navigable(t) && !insideWalls(t) && standable(t, m.roads[r * m.w + c] === '1') && !unitAt(B, c, r) && neighbours(c, r, m.w, m.h).some(([nc, nr]) => navigable(terrainAt(B, nc, nr)))) shore.push([c, r]); }
+    shore.sort((a, b) => hexDist(a[0], a[1], 6, 5) - hexDist(b[0], b[1], 6, 5));
+    const best = shore[0]; if (!best) return;
+    const dist = reach(B, u, Infinity); const landing = dist[key(best[0], best[1])];
+    if (landing && landing.cost <= u.mp && hexDist(best[0], best[1], 6, 5) <= 4) { moveUnit(B, u, best[0], best[1]); return; }
+    const step = stepToward(B, u, [key(best[0], best[1])]);
+    if (step) { const [c, r] = step.split(',').map(Number); if (navigable(terrainAt(B, c, r)) || hexDist(c, r, 6, 5) <= 4) moveUnit(B, u, c, r); }
   }
   function aiSide(B, side, ctx) {
     const m = HEXMAPS[B.city]; const enemy = side === 'A' ? 'D' : 'A';
@@ -330,6 +370,7 @@ const BATTLE = (() => {
     const foodDays = side === 'A' ? B.att.food / Math.max(1, sideTroops(B, 'A') * FOOD_PER_MAN_DAY) : Infinity;
     for (const u of mine) {
       if (!B.units.includes(u)) continue;
+      if (u.naval) { aiShip(B, u, side, ctx, gates, centre); continue; }
       // fight anything in reach that is worth fighting
       const targets = targetsFor(B, u).sort((a, b) => strength(B, a, ctx) * (1 + defenceBonus(B, a)) - strength(B, b, ctx) * (1 + defenceBonus(B, b)));
       const attackable = targets.filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1);
@@ -376,8 +417,11 @@ const BATTLE = (() => {
   // ---- the day ----
   function deployArrival(B, a, ctx) {
     const m = HEXMAPS[B.city];
-    const units = attachOfficers(splitArmy(a.troops), a.officers.map((n) => ctx.officer(n)).filter(Boolean));
     const exit = a.exit || (a.side === 'A' ? B.att.exit : B.def.exit) || m.exits[0];
+    const afloat = shipShare(a.troops, a.fleet, exit && (exit.type === 'river' || exit.type === 'sea'), m);
+    const all = attachOfficers(splitArmy(a.troops - afloat).concat(splitArmy(afloat)), a.officers.map((n) => ctx.officer(n)).filter(Boolean));
+    const nLand = splitArmy(a.troops - afloat).length; const units = all.slice(0, nLand), ships = all.slice(nLand);
+    for (const [i, pos] of deployNaval(m, exit, ships.map((u) => u.troops), new Set(B.units.map((x) => key(x.c, x.r)))).entries()) B.units.push(makeUnit(B, a.side, a.fid, ships[i].troops, a.training || 50, ships[i].officers, pos.c, pos.r, a.from, ctx, true, a.fleet));
     const spots = deployAttacker(m, exit, units.map((u) => u.troops)).filter((s) => !unitAt(B, s.c, s.r));
     // fall back to any free standable hex near the exit
     let i = 0;
@@ -391,9 +435,14 @@ const BATTLE = (() => {
     if (a.side === 'A') B.att.start += a.troops;
     log(B, `${ctx.fname(a.fid)} reinforces the ${a.side === 'A' ? 'besiegers' : 'garrison'} with ${a.troops.toLocaleString()} men${a.officers.length ? ` under ${a.officers.join(', ')}` : ''}${a.food ? ` and ${a.food.toLocaleString()} food` : ''}.`, a.side === 'A' ? 'att' : 'def');
   }
-  function makeUnit(B, side, fid, troops, training, officers, c, r, from, ctx) {
+  function makeUnit(B, side, fid, troops, training, officers, c, r, from, ctx, naval = false, fleet = 0) {
     const offs = officers.map((n) => ctx.officer(n)).filter(Boolean);
-    return { id: ++B.nextId, side, fid, troops, max: troops, training, officers, morale: Math.min(100, 70 + Math.round(bestStat(null, offs, 'ldr', 40) / 4)), c, r, mp: MP_PER_DAY, acted: false, from };
+    return { id: ++B.nextId, side, fid, troops, max: troops, training, officers, morale: Math.min(100, 70 + Math.round(bestStat(null, offs, 'ldr', 40) / 4)), c, r, mp: MP_PER_DAY, acted: false, from, naval, fleet };
+  }
+  // split an army between ships and the shore: a water road puts most of it afloat, a land road a third, as far as the fleet can carry
+  function shipShare(troops, fleet, byWater, map) {
+    if (!fleet || navalHexes(map) < 3) return 0;
+    return Math.min(Math.floor(troops * (byWater ? 0.6 : 0.3)), fleetCapacity(fleet));
   }
   function checkOver(B, ctx) {
     if (B.over) return;
@@ -432,22 +481,33 @@ const BATTLE = (() => {
   }
 
   // ---- creation ----
-  function create({ city, attF, defF, fromCity, troops, food, officers, training, walls, exit, cityTroops, cityOfficers, cityTraining, control, ctx, record }) {
+  function create({ city, attF, defF, fromCity, troops, food, officers, training, walls, exit, cityTroops, cityOfficers, cityTraining, control, ctx, record, fleet = 0, cityFleet = 0 }) {
     const m = HEXMAPS[city];
     const B = { city, attF, defF, day: 0, dayInMonth: 0, startedTurn: ctx.turn(), nextId: 0, units: [], arrivals: [], gates: {}, captives: [], log: [], over: null, walls,
-      att: { fid: attF, from: fromCity, food, start: troops, fled: 0, exit, control: control.A, asked: false },
-      def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false }, replay: record ? [] : null };
-    const aUnits = attachOfficers(splitArmy(troops), officers.map((n) => ctx.officer(n)).filter(Boolean));
-    for (const [i, pos] of deployAttacker(m, exit, aUnits.map((u) => u.troops)).entries()) B.units.push(makeUnit(B, 'A', attF, aUnits[i].troops, training, aUnits[i].officers, pos.c, pos.r, fromCity, ctx));
-    const dUnits = attachOfficers(splitArmy(cityTroops), cityOfficers.map((n) => ctx.officer(n)).filter(Boolean));
-    for (const [i, pos] of deployDefender(m, dUnits.map((u) => u.troops), exit).entries()) B.units.push(makeUnit(B, 'D', defF, dUnits[i].troops, cityTraining, dUnits[i].officers, pos.c, pos.r, city, ctx));
-    log(B, `${ctx.fname(attF)} marches on ${ctx.pname(city)} with ${troops.toLocaleString()} men in ${aUnits.length} units; ${defF ? ctx.fname(defF) : 'the town'} holds it with ${cityTroops.toLocaleString()}.`);
+      att: { fid: attF, from: fromCity, food, start: troops, fled: 0, exit, control: control.A, asked: false, fleet },
+      def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false, fleet: cityFleet }, replay: record ? [] : null };
+    // the attacker: part of the army aboard ship when it has a fleet and there is water to sail
+    const afloat = shipShare(troops, fleet, exit && (exit.type === 'river' || exit.type === 'sea'), m);
+    const aAll = attachOfficers(splitArmy(troops - afloat).concat(splitArmy(afloat)), officers.map((n) => ctx.officer(n)).filter(Boolean));
+    const nLand = splitArmy(troops - afloat).length; const aLand = aAll.slice(0, nLand), aShips = aAll.slice(nLand);
+    for (const [i, pos] of deployAttacker(m, exit, aLand.map((u) => u.troops)).entries()) B.units.push(makeUnit(B, 'A', attF, aLand[i].troops, training, aLand[i].officers, pos.c, pos.r, fromCity, ctx));
+    const takenA = new Set(B.units.map((u) => key(u.c, u.r)));
+    for (const [i, pos] of deployNaval(m, exit || { c: 6, r: 0 }, aShips.map((u) => u.troops), takenA).entries()) B.units.push(makeUnit(B, 'A', attF, aShips[i].troops, training, aShips[i].officers, pos.c, pos.r, fromCity, ctx, true, fleet));
+    // the garrison: a quarter of it mans the city's own boats when the water runs close by
+    const nearWater = (() => { let n = 0; for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) if (navigable(m.terrain[r * m.w + c]) && hexDist(c, r, 6, 5) <= 3) n++; return n; })();
+    const dAfloat = cityFleet && nearWater >= 2 ? Math.min(Math.floor(cityTroops * 0.25), fleetCapacity(cityFleet), nearWater * 5000) : 0;
+    const dAll = attachOfficers(splitArmy(cityTroops - dAfloat).concat(splitArmy(dAfloat)), cityOfficers.map((n) => ctx.officer(n)).filter(Boolean));
+    const nD = splitArmy(cityTroops - dAfloat).length; const dLand = dAll.slice(0, nD), dShips = dAll.slice(nD);
+    for (const [i, pos] of deployDefender(m, dLand.map((u) => u.troops), exit).entries()) B.units.push(makeUnit(B, 'D', defF, dLand[i].troops, cityTraining, dLand[i].officers, pos.c, pos.r, city, ctx));
+    const takenD = new Set(B.units.map((u) => key(u.c, u.r)));
+    for (const [i, pos] of deployNaval(m, { c: 6, r: 5 }, dShips.map((u) => u.troops), takenD).entries()) B.units.push(makeUnit(B, 'D', defF, dShips[i].troops, cityTraining, dShips[i].officers, pos.c, pos.r, city, ctx, true, cityFleet));
+    log(B, `${ctx.fname(attF)} marches on ${ctx.pname(city)} with ${troops.toLocaleString()} men in ${aAll.length} units${afloat ? `, ${afloat.toLocaleString()} of them aboard ship` : ''}; ${defF ? ctx.fname(defF) : 'the town'} holds it with ${cityTroops.toLocaleString()}${dAfloat ? `, ${dAfloat.toLocaleString()} of them on the water` : ''}.`);
     return B;
   }
-  function addArrival(B, { side, fid, from, troops, food, officers, training, days, exit }) {
-    B.arrivals.push({ side, fid, from, troops, food: food || 0, officers: officers || [], training: training || 50, day: B.day + days, exit: exit || null, done: false });
+  function addArrival(B, { side, fid, from, troops, food, officers, training, days, exit, fleet }) {
+    B.arrivals.push({ side, fid, from, troops, food: food || 0, officers: officers || [], training: training || 50, day: B.day + days, exit: exit || null, done: false, fleet: fleet || 0 });
   }
 
-  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, hexDist, neighbours, deployDefender, deployAttacker,
+  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, navigable, fleetCapacity, shipShare, hexDist, neighbours, deployDefender, deployAttacker, deployNaval,
     create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, duel, champion, canChallenge, aiAcceptsDuel, answerChallenge, autoAnswer, melee, subornTargets, subornChance, suborn, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
 })();

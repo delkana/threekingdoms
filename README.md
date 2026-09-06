@@ -680,6 +680,92 @@ the gates first, then the walls, then the city; attackers form up at the exit
 of the road they arrive by, at least three hexes from the walls. The panel lets
 you pick which neighbour attacks and shows both armies as they would stand.
 
+## Tactical battles
+
+With **Tactical battles on the hex maps** switched on (the ≡ menu; it is on by
+default), an attack on a city is fought out on that city's 13 × 12 hex map, one
+day per turn. Battles between AI houses are fought at once, thirty days a month;
+a battle the player is part of waits for the battle screen, which opens when you
+attack, from the ⚔ badge in the top bar, or from the besieged city's panel. You
+may fight each day yourself, let your generals fight a day or the rest of the
+month, or withdraw. **End Month** will not pass an undecided battle of yours
+without asking: fight it, or let the generals finish the month.
+
+**Days.** Armies deploy as described under *Battle maps*. A unit has three
+movement points a day (roads cost one, hills, forest and streams two, marsh
+three); it may fight once, either against a neighbour or, from walls, gates,
+hills or ships, with arrows two hexes away and no reply. Casualties follow
+strength (men, the best WAR and LDR among the unit's officers, training, morale)
+against the defender's strength and ground; a unit that loses far more than it
+inflicts loses morale, and it breaks when its morale or numbers fail. A barred
+gate must be rammed three times, or its defenders broken, before attackers can
+pass the walls; the city falls when attackers hold its heart with no defenders
+left inside the walls (or the garrison reduced to less than a third of the
+besiegers), or when every defender is gone. Attackers move first each day.
+
+**Food.** The besiegers bring a tenth of their number in grain and eat every
+day; the garrison eats from the granary. Hunger costs men and morale.
+
+**Help.** When a battle begins the AI calls its neighbouring cities and its
+allies: attackers' help arrives within one to ten days, a defender's in fifteen
+to twenty. The player sends messengers once from the battle screen, choosing
+how many men and how much grain each neighbouring city sends and which allies
+to ask; allies answer according to relations and favours owed. A battle not
+decided by the month's end continues into the next month, and during the normal
+turn any neighbouring city of either house (or an ally's) may send men and grain
+to it, arriving within ten days; a transfer into a besieged city does the same.
+Recruits raised in a besieged city join its walls at the month's turn. A siege
+that sees no blood for a fortnight forces the attacker to assault or go home,
+and no siege lasts beyond four months.
+
+**Champions.** When a unit with officers attacks a unit with officers, its best
+fighter may first call the enemy's champion out to single combat; the AI does
+the same to the player, who answers from the battle screen. Either side may
+decline at a small cost in morale. The duel follows the same odds as the old
+challenges (WAR cubed, treasures counting); the loser's unit and its neighbours
+lose heart, the winner's gain it, and the loser is wounded for the rest of the
+battle, or taken prisoner, or slain. Each pair may cross arms once a day.
+
+**Letters.** The cleverest officer on the field may write to a wavering enemy
+officer (loyalty under 70, not a ruler, not a sworn brother, not an enemy of the
+lord who courts him). The chance rises with low loyalty, the envoy's INT, gold
+sent with the letters (spent whether or not he comes), a losing fight and low
+morale. A commander who turns brings his whole unit over; another officer slips
+across alone. Each officer can be approached once a battle; a refusal hardens
+him a little. The AI writes letters too when it has gold to spare.
+
+**Officers of a broken unit** mostly escape (about two thirds); some are taken
+prisoner and a few fall. Prisoners are judged at the month's end: release,
+execute, **ransom** (a price from 300 gold upward by the officer's stats, which
+his house pays if it can afford it and thinks him worth it) or recruit, which is
+only possible when his loyalty is below 70 or his house is gone. An AI house
+holding one of your officers may send an envoy offering him back for gold.
+
+**Ships.** A city with a fleet puts men aboard: most of an army that comes by a
+river or sea road, a third of one that comes by land (as far as the fleet can
+carry, 250 men per point of fleet), and a quarter of a garrison whose walls stand
+by the water. Ships move one point per hex on sea, lake and river, shoot two
+hexes away, are hard to attack from the bank, fight with their fleet's skill,
+and may land on a free shore hex outside the walls, which ends their day and
+makes them foot soldiers. Foot and horse may also ford or swim across a river,
+lake or sea hex, but only with a full day's movement in hand, and men in the
+water fight at half strength and defend at half. Roads never run over water:
+where a road meets a river the army fords it.
+Frozen northern rivers carry no ships. Rivers on the hex maps are carved as
+unbroken paths, through the walls and the town itself where they flow.
+
+**Favours.** A house that marches to an ally's battle is owed a favour, shown in
+the Diplomacy screen. An ally next to your battle who owes you one is far more
+likely to answer your messengers; one you owe is less so. When an AI ally next
+to one of your cities goes to war, its rider asks you for men before the month
+ends (the battle waits for your answer): send help from the city panel or the
+rider's prompt, or decline, which costs relations, dearly if you owed them.
+Favours are repaid by marching in turn or with a gift worth 400 or more (gold,
+or food at a tenth of its weight); the AI repays with gifts when it has gold.
+
+**Watching.** In observer mode, **Replay AI battles** records each siege so the
+month's battle reports offer a day-by-day replay on the map.
+
 ## Population
 
 Every city's population grows (faster in spring, faster at peace, and faster

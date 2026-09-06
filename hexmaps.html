@@ -91,7 +91,7 @@
   <script src="js/hexview.js"></script>
   <script>
     const ORDER = ['p', 'a', 'f', 'h', 'm', 'w', 's', 'r', 'l', '~', 'G', 'W', 'C'];
-    const ruleText = (k) => { const R = BATTLE.TERRAIN[k]; return { move: R.move === null ? '—' : String(R.move), def: R.move === null && !'CW'.includes(k) ? '—' : R.def === 0 ? '0' : `${R.def > 0 ? '+' : '−'}${Math.round(Math.abs(R.def) * 100)}%`, los: R.los ? 'yes' : 'no', cav: R.charge ? 'yes' : 'no', note: R.note }; };
+    const ruleText = (k) => { const R = BATTLE.TERRAIN[k]; return { move: R.move === null ? (BATTLE.navigable(k) ? 'full day' : '—') : String(R.move), def: R.move === null && !'CW'.includes(k) ? '—' : R.def === 0 ? '0' : `${R.def > 0 ? '+' : '−'}${Math.round(Math.abs(R.def) * 100)}%`, los: R.los ? 'yes' : 'no', cav: R.charge ? 'yes' : 'no', note: R.note }; };
     let attackerFrom = null;   // exit id chosen for the deployment preview
     const HEX_KM = 5, CC = 6, CR = 5;
     const ids = PROVINCES.map((p) => p.id); const byId = Object.fromEntries(PROVINCES.map((p) => [p.id, p]));

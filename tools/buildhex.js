@@ -215,7 +215,7 @@ const r1 = (v) => Math.round(v * 100) / 100;
       let exit = null;
       for (let k = 1; k < 60; k++) { const kx = ux * k * HEX_KM * 0.5, ky = uy * k * HEX_KM * 0.5; let best = null, bd = 1e9; for (const h of cells) { const d = Math.hypot(h.x - kx, h.y - ky); if (d < bd) { bd = d; best = h; } } if (bd > HEX_KM) break; exit = best; }
       if (!exit) continue;
-      for (const [c, r] of hexLine(CC, CR, exit.c, exit.r)) { const i = r * W + c; if (terrain[i] === 'C') continue; if (terrain[i] === 'W') terrain[i] = 'G'; else if (terrain[i] !== '~' && terrain[i] !== 'l') roads[i] = 1; }
+      for (const [c, r] of hexLine(CC, CR, exit.c, exit.r)) { const i = r * W + c; if (terrain[i] === 'C') continue; if (terrain[i] === 'W') terrain[i] = 'G'; else if (!'~lrs'.includes(terrain[i])) roads[i] = 1; }   // no roads on water: rivers are forded, not bridged
       exits.push({ to, type, c: exit.c, r: exit.r });
     }
     // 6. dressing
