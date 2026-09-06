@@ -41,6 +41,12 @@
     .gate { fill: #7a5a2c; stroke: #f0dcae; stroke-width: 1; }
     .city-name { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; }
     .owner-chip { stroke: rgba(0,0,0,0.6); stroke-width: 0.8; }
+    .unit { stroke: rgba(0,0,0,0.75); stroke-width: 1; }
+    .unit-n { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+    .unit-o { font-family: var(--serif); fill: rgba(255,255,255,0.9); text-shadow: 0 1px 2px #000; pointer-events: none; }
+    .dep { margin-top: 10px; }
+    .dep select { font-family: var(--serif); background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12.5px; }
+    .dep .line { font-size: 12.5px; margin: 4px 0; line-height: 1.4; }
     .coord { font-family: var(--serif); font-size: 7.5px; fill: rgba(255,255,255,0.4); }
     .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 22px; }
     .thumb { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px; cursor: pointer; text-align: center; font-size: 12px; }
@@ -68,6 +74,8 @@
       <div class="hx-side">
         <h2 id="title"></h2>
         <div id="meta"></div>
+        <div class="sec">Deployment</div>
+        <div class="dep" id="deploy"></div>
         <table class="hx" id="legend"></table>
         <p class="hint" style="margin-top:10px">Proposed rules: movement points per hex, the defence bonus to a unit standing in it, whether it blocks line of sight for archers, and whether cavalry may charge through it. Rivers are crossed only at bridges and fords (the pale dotted road) or by fleet-borne troops; mountains are impassable except along roads.</p>
       </div>
@@ -79,6 +87,7 @@
   <script src="js/events.js"></script>
   <script src="js/game.js"></script>
   <script src="js/hexmaps.js"></script>
+  <script src="js/battle.js"></script>
   <script>
     const TERRAIN = {
       '~': { name: 'Sea',       color: 'rgba(0,0,0,0)',        swatch: '#1f4a63', move: '—',  def: '—',    los: 'no',  cav: 'no',  note: 'Impassable; ships only.' },
@@ -96,6 +105,8 @@
       'G': { name: 'Gate',      color: 'rgba(230,180,80,0.70)', swatch: '#c9a24a', move: '2', def: '+50%', los: 'yes', cav: 'no', note: 'The way in. Storming a gate costs the attacker double; a rammed gate falls after three assaults.' },
     };
     const ORDER = ['p', 'a', 'f', 'h', 'm', 'w', 's', 'r', 'l', '~', 'G', 'W', 'C'];
+    const ruleText = (k) => { const R = BATTLE.TERRAIN[k]; return { move: R.move === null ? '—' : String(R.move), def: R.move === null && !'CW'.includes(k) ? '—' : R.def === 0 ? '0' : `${R.def > 0 ? '+' : '−'}${Math.round(Math.abs(R.def) * 100)}%`, los: R.los ? 'yes' : 'no', cav: R.charge ? 'yes' : 'no', note: R.note }; };
+    let attackerFrom = null;   // exit id chosen for the deployment preview
     const HEX_KM = 5, CC = 6, CR = 5;
     const ids = PROVINCES.map((p) => p.id); const byId = Object.fromEntries(PROVINCES.map((p) => [p.id, p]));
     const $ = (s) => document.querySelector(s);
@@ -231,8 +242,34 @@
       const count = {}; for (const ch of m.terrain) count[ch] = (count[ch] || 0) + 1;
       const gp = GS.provinces[id], owner = ownerOf(id); const offs = owner ? Game.officersIn(id, owner.id) : [];
       $('#meta').innerHTML = `<div class="kv"><span>Held by</span><b>${owner ? `<span class="chip" style="background:${owner.color}"></span> ${owner.name}` : 'no one'}</b></div><div class="kv"><span>Garrison</span><b>${gp.troops.toLocaleString()} troops · walls ${gp.defense} · training ${gp.training}</b></div><div class="kv"><span>Officers present</span><b>${offs.map((o) => o.name).join(', ') || '—'}</b></div><div class="kv"><span>Tier</span><b>${['', 'town', 'city', 'great city'][P.tier]}</b></div><div class="kv"><span>Elevation</span><b>${m.elev} m</b></div><div class="kv"><span>Traits</span><b>${P.traits.map((t) => TRAIT_INFO[t].label).join(', ') || '—'}</b></div><div class="kv"><span>Roads out</span><b>${m.exits.map((e) => byId[e.to].name).join(', ')}</b></div><div class="kv"><span>Rivers</span><b>${[...new Set(m.rivers.filter((r) => r.n).map((r) => r.n))].join(', ') || '—'}</b></div><div class="kv"><span>Position</span><b>${P.lat.toFixed(2)}N ${P.lon.toFixed(2)}E</b></div>`;
-      $('#legend').innerHTML = `<tr><th>Terrain</th><th>Hexes</th><th>Move</th><th>Defence</th><th>Blocks sight</th><th>Charge</th></tr>` + ORDER.filter((k) => count[k]).map((k) => `<tr title="${TERRAIN[k].note}"><td><i style="background:${TERRAIN[k].swatch}"></i>${TERRAIN[k].name}</td><td>${count[k]}</td><td>${TERRAIN[k].move}</td><td>${TERRAIN[k].def}</td><td>${TERRAIN[k].los}</td><td>${TERRAIN[k].cav}</td></tr>`).join('');
+      $('#legend').innerHTML = `<tr><th>Terrain</th><th>Hexes</th><th>Move</th><th>Defence</th><th>Blocks sight</th><th>Charge</th></tr>` + ORDER.filter((k) => count[k]).map((k) => { const R = ruleText(k); return `<tr title="${R.note}"><td><i style="background:${TERRAIN[k].swatch}"></i>${TERRAIN[k].name}</td><td>${count[k]}</td><td>${R.move}</td><td>${R.def}</td><td>${R.los}</td><td>${R.cav}</td></tr>`; }).join('');
+      renderDeployment(id);
       document.querySelectorAll('.thumb').forEach((t) => t.classList.toggle('sel', t.dataset.id === id));
+    }
+    // ---- deployment preview: the garrison as it would stand, and an attacker from one of the roads ----
+    function armyOf(cityId, share) {
+      const gp = GS.provinces[cityId], owner = ownerOf(cityId);
+      const troops = Math.floor(gp.troops * share);
+      const offs = owner ? Game.officersIn(cityId, owner.id).filter((o) => share === 1 || !Game.isRuler(o)).sort((a, b) => (b.ldr + b.war) - (a.ldr + a.war)).slice(0, share === 1 ? 99 : 3) : [];
+      return { troops, owner, units: BATTLE.attachOfficers(BATTLE.splitArmy(troops), offs), officers: offs };
+    }
+    function renderDeployment(id) {
+      const m = HEXMAPS[id];
+      if (!attackerFrom || !m.exits.some((e) => e.to === attackerFrom)) { const hostile = m.exits.find((e) => { const a = ownerOf(e.to), d = ownerOf(id); return a && (!d || a.id !== d.id); }); attackerFrom = (hostile || m.exits[0] || {}).to || null; }
+      const def = armyOf(id, 1); const exit = m.exits.find((e) => e.to === attackerFrom); const att = exit ? armyOf(exit.to, 0.7) : null;
+      const who = (a) => (a.owner ? `<span class="chip" style="background:${a.owner.color}"></span> ${a.owner.name}` : 'the town militia');
+      const list = (a) => a.units.map((u, i) => `${u.troops.toLocaleString()}${u.officers.length ? ` (${u.officers.join(', ')})` : ''}`).join(' · ');
+      $('#deploy').innerHTML = `<div class="line"><b>Defender:</b> ${who(def)}, ${def.troops.toLocaleString()} troops → ${BATTLE.describeSplit(def.units.map((u) => u.troops))}.<br><span class="hint">${list(def) || '—'}</span></div>
+        <div class="line"><b>Attacker from</b> <select id="att-from">${m.exits.map((e) => `<option value="${e.to}"${e.to === attackerFrom ? ' selected' : ''}>${byId[e.to].name}${ownerOf(e.to) ? ` (${ownerOf(e.to).name})` : ' (unclaimed)'}</option>`).join('')}</select>${att ? `: ${who(att)} brings ${att.troops.toLocaleString()} troops (seven tenths of the garrison, as a strategic attack does) → ${BATTLE.describeSplit(att.units.map((u) => u.troops))}.<br><span class="hint">${list(att) || '—'}</span>` : ''}</div>
+        <div class="hint">Units are 5,000 strong, the remainder filling a smaller unit at the end; past twenty units the size rises to 6,000, 7,000 and so on until the army fits. Officers ride with the largest units, the best commander first. Defenders hold the gates, then the walls, then the city; attackers form up at their road's exit.</div>`;
+      $('#att-from').addEventListener('change', (e) => { attackerFrom = e.target.value; renderDeployment(id); });
+      // tokens on the map
+      const s = 26; const hw = Math.sqrt(3) * s; const svg = $('#map'); svg.querySelectorAll('.units').forEach((g) => g.remove());
+      let g = '<g class="units">';
+      const token = (c, r, u, color) => { const [cx, cy] = centre(c, r, s); const k = u.troops >= 1000 ? `${(u.troops / 1000).toFixed(u.troops % 1000 ? 1 : 0)}k` : u.troops; const o = u.officers.length ? u.officers[0] + (u.officers.length > 1 ? ` +${u.officers.length - 1}` : '') : ''; return `<rect class="unit" x="${f1(cx - hw * 0.42)}" y="${f1(cy - s * 0.5)}" width="${f1(hw * 0.84)}" height="${f1(s)}" rx="3" fill="${color}"/><text class="unit-n" x="${f1(cx)}" y="${f1(cy - 1)}" text-anchor="middle" style="font-size:9.5px">${k}</text>${o ? `<text class="unit-o" x="${f1(cx)}" y="${f1(cy + 8.5)}" text-anchor="middle" style="font-size:6.5px">${o}</text>` : ''}`; };
+      for (const u of BATTLE.deployDefender(m, def.units.map((x) => x.troops)).map((pos, i) => ({ ...pos, ...def.units[i] }))) g += token(u.c, u.r, u, def.owner ? def.owner.color : FREE);
+      if (att) for (const u of BATTLE.deployAttacker(m, exit, att.units.map((x) => x.troops)).map((pos, i) => ({ ...pos, ...att.units[i] }))) g += token(u.c, u.r, u, att.owner ? att.owner.color : FREE);
+      svg.insertAdjacentHTML('beforeend', g + '</g>');
     }
     const sorted = [...PROVINCES].sort((a, b) => a.name.localeCompare(b.name)).map((p) => p.id);
     $('#city').innerHTML = sorted.map((id) => `<option value="${id}">${byId[id].name}</option>`).join('');

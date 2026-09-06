@@ -669,6 +669,17 @@ movement cost, defence bonus, whether it blocks sight, whether cavalry may
 charge. `node tools/buildhex.js` rebuilds `js/hexmaps.js` and the relief
 images in `img/hex/`.
 
+The battle rules themselves live in `js/battle.js` and the viewer previews the
+first of them, **deployment**. An army splits into units of 5,000, the
+remainder filling a smaller unit at the end; if that would put more than twenty
+units on the field the unit size rises to 6,000, then 7,000, and so on until
+the army fits (so 104,000 men form 17 units of 6,000 and one of 2,000). Officers
+ride with the largest friendly units, the best commander (LDR + WAR) with the
+largest, and surplus officers double up from the largest down. Defenders hold
+the gates first, then the walls, then the city; attackers form up at the exit
+of the road they arrive by, at least three hexes from the walls. The panel lets
+you pick which neighbour attacks and shows both armies as they would stand.
+
 ## Population
 
 Every city's population grows (faster in spring, faster at peace, and faster
