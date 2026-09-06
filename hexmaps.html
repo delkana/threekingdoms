@@ -121,8 +121,8 @@
       const [ox, oy] = centre(CC, CR, s); const km = ([x, y]) => [ox + x * k, oy - y * k];
       const W = hw * (m.w + 0.5) + 4, H = s * 1.5 * (m.h - 1) + 2 * s + 4;
       const u = ++uid; const tints = !full || $('#tints').checked;
-      const isWater = (t) => '~lr'.includes(t);
-      const WATER_FILL = { '~': `url(#sea${u})`, 'l': '#3a7398', 'r': '#3b7fa6' };
+      const isWater = (t) => '~lrs'.includes(t);
+      const WATER_FILL = { '~': `url(#sea${u})`, 'l': '#3a7398', 'r': '#3b7fa6', 's': '#5a9cbd' };
       const atT = (c, r) => (c >= 0 && c < m.w && r >= 0 && r < m.h ? m.terrain[r * m.w + c] : null);
       const dirsFor = (r) => (r & 1 ? [[1, 0], [1, 1], [0, 1], [-1, 0], [0, -1], [1, -1]] : [[1, 0], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]]);   // E SE SW W NW NE
       const cornerOf = (cx, cy, i) => { const a = Math.PI / 180 * (60 * i - 30); return [cx + s * Math.cos(a), cy + s * Math.sin(a)]; };
@@ -152,7 +152,6 @@
       }
       if (shore) out += `<path d="${shore}" fill="none" stroke="rgba(160,215,240,0.28)" stroke-width="${f1(s / 5)}" stroke-linecap="round"/><path d="${shore}" fill="none" stroke="rgba(215,240,250,0.75)" stroke-width="${f1(s / 16)}" stroke-linecap="round"/>`;
       // lakes, rivers, coast
-      for (const rv of m.rivers.filter((x) => x.r > 6)) { const d = spline(rv.pts.map(km)); const major = rv.r <= 3, mid = rv.r <= 6; const bank = (major ? 6 : mid ? 4.2 : 2.4) * s / 26, w = (major ? 3.6 : mid ? 2.4 : 1.2) * s / 26; out += `<path d="${d}" class="river-bank" style="stroke-width:${f1(bank)}"/><path d="${d}" class="river" style="stroke-width:${f1(w)}"/>${mid ? `<path d="${d}" class="river-glint" style="stroke-width:${f1(w * 0.35)}"/>` : ''}`; }
       // terrain glyphs
       if (full) for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) {
         const t = m.terrain[r * m.w + c]; const [cx, cy] = centre(c, r, s);
