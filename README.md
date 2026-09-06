@@ -252,6 +252,20 @@ world the game has produced.
   loyalty. Zhang Lu's **charity houses** draw refugees and scorn, **Yang Song's
   price** costs him gold or his best general, and **the sealed granaries** let
   him surrender Hanzhong with honour to a giant at the pass.
+- **Kong Rong, Tao Qian and Liu Yao.** Kong Rong may send Taishi Ci through
+  the **siege of Beihai** to fetch Liu Bei, and later **go to court** and hand
+  Beihai to a neighbour. Tao Qian judges **Que Xuan's false emperor** and hires
+  or refuses **the Taishan bandits**. Taishi Ci takes **his road** to his
+  kinsman Liu Yao and fights **the duel at Shenting** against the Sun lord,
+  after which he serves the winner.
+- **Liu Bei goes west.** With the enemy two to one on every road, Liu Bei can
+  choose **flight to Jing**: abandon the east with a third of his army and
+  become his kinsman's guest before the walls fall. Later, allied to or hosted
+  by the Sun house, he may be **lent Jiangling**, his base for the march into
+  Shu. Two rules help him survive: a beloved lord's people follow him when a
+  city falls, and any lord who loses his last city seizes a masterless city
+  next door with the remnant of his army rather than vanishing. Wanderers also
+  prefer hosts who hold their destiny cities and kinsmen of their own surname.
 - **The world at large.** A frontier general of low loyalty declares for
   himself and founds a house. A succession with a rival heir away from the seat
   may split a large realm in two. A great plague empties cities and kills
@@ -622,17 +636,27 @@ good; treaties, captives, guests and war aims all carry over.
 
 ## Exile has limits
 
-A wandering house may fall twice. The third time it loses its last city no
-lord will shelter it and the house is finished. Twelve years in exile, counted
-across every host and every stint, also end it, so a house cannot live forever
-as a guest by moving from court to court.
+An ordinary house may fall into exile twice; the third time it loses its last
+city no lord will shelter it and the house is finished, and twelve years in
+exile, counted across every host and every stint, also end it. The born
+wanderers (Liu Bei, Lü Bu, the Suns) have no fall limit but may spend at most
+twenty years in one stint and twenty-five in all. In exile a lord never leads
+the household's raids himself, the household seizes only towns that no giant
+next door can take straight back, and it prefers the cities of its destiny.
+A fief granted by a host is an interior city of the host's realm, chosen to
+match the guest's destiny where possible, and the grant binds host and vassal
+in a five-year alliance.
 
 ## Population
 
-Every city's population grows (faster in spring, and faster the further it
-stands below its ceiling) toward a limit set by its size: about 260,000 for a
-town, 520,000 for a city and 900,000 for a great city. Orderly cities below two
-fifths of their ceiling also draw settlers back. Population caps sustainable
+Every city's population grows (faster in spring, faster at peace, and faster
+the further it stands below its ceiling) toward a limit set by its size: about
+260,000 for a town, 520,000 for a city and 900,000 for a great city. Orderly
+cities below three fifths of their ceiling draw settlers back, and the
+**Resettle** command (600 gold) brings refugees to empty fields in a single
+season. A levy takes men from the fields but their households remain, so
+conscription costs the land two people for every five soldiers rather than one
+for one. Sustainable levies are capped at 22% of the population. Population caps sustainable
 levies, shrinks when a city is sacked or conscripted, and no longer depends on
 a regional trait.
 

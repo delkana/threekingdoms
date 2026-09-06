@@ -576,6 +576,7 @@ const UI = (() => {
           <button data-cmd="search" ${!idle.length ? 'disabled' : ''}>Search</button>
           <button data-cmd="reward">Reward (${Game.COST.reward}g)</button>
           <button data-cmd="pacify" ${!idle.length ? 'disabled' : ''} title="Restore order">Pacify (${Game.COST.pacify}g)</button>
+          <button data-cmd="resettle" ${!idle.length ? 'disabled' : ''} title="Bring settlers to repopulate the land">Resettle (${Game.COST.resettle}g)</button>
           <button data-cmd="appoint" title="Grant a court rank">Appoint rank</button>
           <button data-cmd="plot" ${!idle.length || !Game.plotTargets(selected).length ? 'disabled' : ''} title="Schemes against a neighbouring city">Plot</button>
           <button data-cmd="bestow" ${offs.some((o) => Game.itemsOf(o.name).length) && offs.length > 1 ? '' : 'disabled'} title="Give a treasure to another officer here">Bestow treasure</button>
@@ -795,6 +796,8 @@ const UI = (() => {
         return chooseOfficer('Reward an officer', `Spend ${Game.COST.reward} gold on gifts to raise loyalty. Officers below 50 loyalty may defect.`, list, (o) => `loyalty ${o.loyalty}`, (n) => result(Game.reward(pid, n)));
       }
       case 'buyfood': return buyFoodDialog(pid);
+      case 'resettle':
+        return chooseOfficer('Resettle the land', `Spend ${Game.COST.resettle} gold bringing refugees and settlers to the empty fields. The gain depends on the city's size and the officer's <b>POL</b>; Administrators do better. Population caps the levies a city can sustain (30% of it) and adds to income, so a countryside bled white by war must be repeopled before it can raise armies again. Needs order 40.`, idle, (o) => `≈ +${fmt(Math.floor(([0, 260000, 520000, 900000][PROVINCES.find((x) => x.id === pid).tier] * 0.012 + o.pol * 40 + 750) * ((o.skills || []).includes('admin') ? 1.4 : 1)))}`, (n) => result(Game.resettle(pid, n)));
       case 'pacify':
         return chooseOfficer('Pacify the city', `Spend ${Game.COST.pacify} gold settling disputes and feeding the poor. Gain depends on <b>POL</b> and <b>CHR</b>; Administrators and Orators do half again as well. Order below 60 cuts income, below 30 stops levies, below 20 risks revolt.`, idle, (o) => `≈ +${Math.floor((3 + o.pol / 6 + o.chr / 10 + 2) * ((o.skills || []).some((s) => s === 'admin' || s === 'orator') ? 1.5 : 1))}`, (n) => result(Game.pacify(pid, n)));
       case 'appoint': {
@@ -1191,7 +1194,7 @@ const UI = (() => {
       <div class="sec">The screen</div>
       <p class="hint">The map fills the screen: drag to pan, wheel or pinch to zoom; zoomed out, cities show only their names. Click a city to open its panel on the right; close it with × or Esc, and reopen it with the tab on the right edge. The strip at the bottom shows the latest chronicle entry; click it for the full record. The ≡ menu holds statistics, lore, help, the legend, save and the main menu.</p>
       <div class="sec">The month</div>
-      <p class="hint">Every officer in a city acts once a month. Farm, Trade, Fortify and Train build the city; Conscript raises troops (needs order 30+); Search finds gold and hidden treasures; Pacify restores order; Appoint grants ranks; Plot works against a neighbour; Transfer moves men and goods; Attack sends up to three commanders with a stance and, for a clever commander, a stratagem. Set each city\'s defence posture in its panel. Diplomacy, Objectives, treasures and exile have their own screens. The README explains every rule.</p>
+      <p class="hint">Every officer in a city acts once a month. Farm, Trade, Fortify and Train build the city; Conscript raises troops (needs order 30+); Search finds gold and hidden treasures; Pacify restores order; Resettle brings people back to emptied land; Appoint grants ranks; Plot works against a neighbour; Transfer moves men and goods; Attack sends up to three commanders with a stance and, for a clever commander, a stratagem. Set each city\'s defence posture in its panel. Diplomacy, Objectives, treasures and exile have their own screens. The README explains every rule.</p>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal });
   }
 

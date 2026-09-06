@@ -9,7 +9,7 @@ const Game = (() => {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
 
-  const COST = { develop: 200, fortify: 300, recruit: 300, reward: 200, ships: 300, pacify: 100, plots: { spy: 100, incite: 500, unrest: 300, sabotage: 400, assassinate: 800 } };
+  const COST = { develop: 200, fortify: 300, recruit: 300, reward: 200, ships: 300, pacify: 100, resettle: 600, plots: { spy: 100, incite: 500, unrest: 300, sabotage: 400, assassinate: 800 } };
   // Roads (typed, with waypoints) define adjacency
   const roadKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   const ROAD_MAP = Object.fromEntries(ROADS.map((r) => [roadKey(r[0], r[1]), { type: r[2], via: r[3] || [] }]));
@@ -262,7 +262,7 @@ const Game = (() => {
     if (horses) n = Math.floor(n * 1.25);
     n = Math.min(n, Math.floor(p.pop * 0.04));
     p.gold -= Math.round(rc);
-    p.pop -= n;
+    p.pop -= Math.floor(n * 0.4);
     // green recruits dilute training (frontier riders less so)
     p.training = Math.round((p.training * p.troops + (horses ? 45 : 30) * n) / (p.troops + n));
     p.troops += n;
@@ -324,6 +324,18 @@ const Game = (() => {
     if (hasSkill(o, 'admin') || hasSkill(o, 'orator')) gain = Math.floor(gain * 1.5);
     p.gold -= COST.pacify; const before = p.order; p.order = clamp(p.order + gain, 0, 100); o.acted = true;
     return ok(`${o.name} settled disputes and fed the poor in ${pname(pid)}: order ${before} → ${p.order}.`);
+  }
+  const popCapOf = (p) => [0, 260000, 520000, 900000][provData(p.id).tier];
+  // Bring settlers to empty land: the answer to a countryside bled white by decades of levies
+  function resettle(pid, name) {
+    const p = prov(pid); const e = useOfficer(name, pid); if (e) return e;
+    if (p.gold < COST.resettle) return fail(`Not enough gold (need ${COST.resettle}).`);
+    if (p.order < 40) return fail('Nobody settles in a lawless city: restore order first.');
+    const cap = popCapOf(p); if (p.pop >= cap * 0.95) return fail(`${pname(pid)} is as full as its land can feed.`);
+    const o = off(name);
+    const gain = Math.min(cap - p.pop, Math.floor(cap * 0.012 + o.pol * 40 + ri(0, 1500)) * (hasSkill(o, 'admin') ? 1.4 : 1));
+    p.gold -= COST.resettle; const before = p.pop; p.pop += Math.floor(gain); p.order = clamp(p.order + 1, 0, 100); o.acted = true;
+    return ok(`${o.name} brought settlers and refugees to the empty fields of ${pname(pid)}: population ${fmt(before)} → ${fmt(p.pop)}.`);
   }
   function setPosture(pid, posture) {
     const p = prov(pid); if (!['hold', 'sally', 'ambush'].includes(posture)) return fail('Unknown posture.');
@@ -715,6 +727,13 @@ const Game = (() => {
     to.training = R.mods && R.mods.external ? 60 : from.training;
     to.defense = Math.max(0, Math.floor(to.defense * 0.7));
     to.pop = Math.floor(to.pop * 0.95);
+    // a beloved lord's people follow him: part of the population leaves with the defeated house
+    if (defF && rulerOf(defF) && rulerOf(defF).chr >= 88 && !S.factions[defF].raider) {
+      const leaving = Math.floor(to.pop * 0.06); to.pop -= leaving;
+      const dest = factionProvinces(defF).filter((q) => q.id !== R.to).sort((a, b) => (S.adj[R.to].includes(b.id) ? 1 : 0) - (S.adj[R.to].includes(a.id) ? 1 : 0))[0];
+      if (dest) { dest.pop += leaving; dest.food += Math.floor(leaving / 10); L(`${fmt(leaving)} of the people of ${pname(R.to)} follow ${rulerOf(defF).name} on the road to ${pname(dest.id)}.`); }
+      else { const F = S.factions[defF]; F.household = F.household || { troops: 0, gold: 0 }; F.household.troops += Math.floor(leaving / 25); L(`The people of ${pname(R.to)} follow ${rulerOf(defF).name} into the wilderness; the young men take up arms for him.`); }
+    }
     for (const o of attOfficers) o.city = R.to;
 
     // captives previously held here by the old owner are freed: home if their house lives, else masterless
@@ -729,11 +748,12 @@ const Game = (() => {
       const destroyed = remainingCities.length === 0;
       // a wandering lord slips away with most of his companions rather than being taken
       const exile = destroyed && S.factions[defF].wanderer;
+      const flight = destroyed && !exile && S.adj[R.to].some((n) => !prov(n).owner);   // a masterless city next door: the remnant seizes it
       const escapees = [];
       for (const o of defOfficers.filter((x) => S.officers[x.name])) {
         const ruler = isRuler(o);
         const swift = canEscape(o);
-        if (exile && (swift || Math.random() < (ruler ? 0.9 : 0.7))) {
+        if ((exile || flight) && (swift || Math.random() < (ruler ? 0.9 : 0.7))) {
           escapees.push(o);
         } else if (!destroyed && (swift || Math.random() < (ruler ? 0.75 : 0.6))) {
           const refuge = nearestOwnedCity(R.to, defF);
@@ -749,7 +769,9 @@ const Game = (() => {
           L(`${o.name} is captured!`, 'good');
         }
       }
-      if (exile && escapees.length && goGuest(defF, R.to, attF, R.startD * 0.2, to.gold * 0.2)) {
+      if (flight && escapees.some(isRuler) && fleeToEmpty(defF, R.to, R.startD * 0.3, to.gold * 0.3)) {
+        L(`${fname(defF)} is not finished: the remnant of the house rides for masterless ground.`, 'head');
+      } else if (exile && escapees.length && (goGuest(defF, R.to, attF, R.startD * 0.2, to.gold * 0.2) || fleeToEmpty(defF, R.to, R.startD * 0.3, to.gold * 0.3))) {
         const F = S.factions[defF];
         if (!escapees.some(isRuler)) { const heir = escapees.reduce((m, o) => (heirScore(defF, o) > heirScore(defF, m) ? o : m)); F.ruler = heir.name; F.name = F.dynasty || heir.name; heir.loyalty = 100; L(`With his lord taken, ${heir.name} leads the remnant of the house.`, 'head'); }
         to.gold = Math.floor(to.gold * 0.8);
@@ -782,20 +804,36 @@ const Game = (() => {
     }
   }
 
+  // A lord who loses his last city may seize a masterless one next door with the remnant of his army instead of vanishing.
+  function fleeToEmpty(fid, fromCity, troops = 0, gold = 0) {
+    const F = S.factions[fid]; if (!F || !F.alive || factionProvinces(fid).length) return false;
+    const empty = S.adj[fromCity].map(prov).filter((p) => !p.owner).sort((a, b) => a.troops - b.troops)[0];
+    if (!empty) return false;
+    empty.owner = fid; empty.troops = Math.floor(empty.troops * 0.5 + troops); empty.gold += Math.floor(gold); empty.order = Math.max(empty.order || 45, 55); empty.posture = 'hold';
+    for (const o of allOfficers()) if (o.faction === fid && !o.captive) o.city = empty.id;
+    F.lastLoss = S.turn;
+    notice(`${fname(fid)}, driven from ${pname(fromCity)}, seizes masterless ${pname(empty.id)} with the remnant of the army.`, 'hist', { major: fid === S.player });
+    return true;
+  }
+
   // ---------- wandering houses: exile as a guest ----------
-  function goGuest(fid, fromCity, exclude, troops = 0, gold = 0) {
+  function goGuest(fid, fromCity, exclude, troops = 0, gold = 0, forced = null) {
     const F = S.factions[fid];
     const candidates = Object.values(S.factions).filter((h) => h.alive && !h.raider && !h.guest && h.id !== fid && h.id !== exclude && factionProvinces(h.id).length);
     if (!candidates.length) return false;
     const near = candidates.filter((h) => S.adj[fromCity].some((n) => prov(n).owner === h.id));
     const pool = near.length ? near : candidates;
-    const hostScore = (h) => { const seat = rulerOf(h.id) ? rulerOf(h.id).city : factionProvinces(h.id)[0].id; const weakNear = neighbors(seat).filter((n) => n.owner !== h.id && (!n.owner || n.troops < 6000)).length; return relation(fid, h.id) + weakNear * 12 + factionProvinces(h.id).length * 3; };
-    const host = pool.reduce((m, h) => (hostScore(h) > hostScore(m) ? h : m));
+    // a wanderer prefers hosts who hold the cities of his destiny, and kinsmen of his own surname
+    const dest = destinyTargets(fid);
+    const kin = (h) => rulerOf(h.id) && familyName(rulerOf(h.id).name) === familyName(rulerOf(fid) ? rulerOf(fid).name : F.ruler);
+    const hostScore = (h) => { const seat = rulerOf(h.id) ? rulerOf(h.id).city : factionProvinces(h.id)[0].id; const weakNear = neighbors(seat).filter((n) => n.owner !== h.id && (!n.owner || n.troops < 6000)).length; return relation(fid, h.id) + weakNear * 12 + factionProvinces(h.id).length * 3 + factionProvinces(h.id).filter((p) => dest.has(p.id)).length * 15 + (kin(h) ? 12 : 0); };
+    const host = forced && S.factions[forced] && S.factions[forced].alive && factionProvinces(forced).length ? S.factions[forced] : pool.reduce((m, h) => (hostScore(h) > hostScore(m) ? h : m));
     const seat = rulerOf(host.id) ? rulerOf(host.id).city : factionProvinces(host.id)[0].id;
     for (const o of allOfficers()) if (o.faction === fid && !o.captive) { o.city = seat; o.acted = true; }
     const wasGuest = F.guest;
-    if (!wasGuest) { F.exiles = (F.exiles || 0) + 1; if (F.exiles > 2) { log(`${F.name} has lost everything for the third time; no lord will shelter such a house again.`, 'hist'); return false; } }
-    F.guest = true; F.host = host.id; F.guestSince = S.turn; F.favor = 50; F.petitionUntil = 0;
+    // a born wanderer like Liu Bei may fall four times before the land gives him up; other lords twice
+    if (!wasGuest) { F.exiles = (F.exiles || 0) + 1; if (!F.wanderer && F.exiles > 2) { log(`${F.name} has lost everything for the third time; no lord will shelter such a house again.`, 'hist'); return false; } }
+    F.guest = true; F.host = host.id; F.guestSince = S.turn; F.favor = kin(host) ? 62 : 50; F.petitionUntil = 0;
     F.household = F.household || { troops: 0, gold: 0 };
     F.household.troops += Math.floor(troops); F.household.gold += Math.floor(gold);
     shiftRelation(fid, host.id, 15);
@@ -805,10 +843,12 @@ const Game = (() => {
   function wake(fid, cityId) {
     const F = S.factions[fid];
     if (!F.alive) return;
+    const patron = F.guest && F.host && S.factions[F.host] && S.factions[F.host].alive && prov(cityId).owner === F.host ? F.host : null;   // a fief granted by the host makes a vassal, not a rival
     if (prov(cityId).owner !== fid) transferCity(cityId, fid);
     for (const o of allOfficers()) if (o.faction === fid && !o.captive && prov(o.city).owner !== fid) { o.city = cityId; }
     const p = prov(cityId);
     if (F.household) { p.troops += F.household.troops; p.gold += F.household.gold; F.household = { troops: 0, gold: 0 }; }
+    if (patron) { const d = dip(fid, patron); d.status = 'alliance'; d.until = S.turn + 60; setRelation(fid, patron, Math.max(relation(fid, patron), 40)); }
     if (F.guest) log(`${fname(fid)} leaves the court of ${fname(F.host)} and raises his banner over ${pname(cityId)}.`, 'hist');
     F.guest = false; F.host = null; F.favor = 0;
   }
@@ -854,7 +894,9 @@ const Game = (() => {
     if (S.factions[F.host].phase && S.factions[F.host].phase !== 'rising') { F.favor = clamp(F.favor - 3, 0, 100); return ok(`${fname(F.host)} rules half the land and grants no fiefs to guests. ${o.name} is sent away with fine words. Favour -3.`, 'bad'); }
     if (Math.random() < petitionChance(fid, o)) {
       const seat = hostSeat(fid);
-      const grant = hostCities.filter((p) => p.id !== seat).sort((a, b) => a.troops - b.troops)[0];
+      const dest = destinyTargets(fid);
+      const exposure = (p) => neighbors(p.id).filter((n) => n.owner !== F.host && n.owner !== fid && (!n.owner || canAttack(n.owner, F.host))).length;
+      const grant = hostCities.filter((p) => p.id !== seat).sort((a, b) => (dest.has(b.id) ? 1 : 0) - (dest.has(a.id) ? 1 : 0) || exposure(a) - exposure(b) || a.troops - b.troops)[0];
       const host = F.host;
       wake(fid, grant.id);
       shiftRelation(fid, host, 20);
@@ -945,12 +987,17 @@ const Game = (() => {
     const idle = () => factionOfficers(fid).filter((o) => !o.acted && prov(o.city).owner === F.host);
     // seize a weak neighbour when the household can take it
     const targets = exileTargets(fid);
-    if (targets.length && F.household.troops >= 3000) {
-      const party = idle().sort((a, b) => b.war - a.war).slice(0, 3);
+    // do not seize a town that a giant next door will take straight back
+    const safe = targets.filter((t) => !neighbors(t.id).some((n) => n.owner && n.owner !== F.host && n.owner !== t.owner && canAttack(n.owner, fid) && n.troops > F.household.troops * 2));
+    if (safe.length && F.household.troops >= 3000) {
+      const others = idle().filter((o) => !isRuler(o));
+      const party = (others.length ? others : idle()).sort((a, b) => b.war - a.war).slice(0, 3);
       if (party.length) {
-        const t = targets.reduce((m, x) => (defStrength(x) < defStrength(m) ? x : m));
+        const dest = destinyTargets(fid); const fated = safe.filter((x) => dest.has(x.id));
+        const t = (fated.length ? fated : safe).reduce((m, x) => (defStrength(x) < defStrength(m) ? x : m));
         const m = battleModifiers(seat, t.id);
-        if (attStrength(F.household.troops * (1 - m.loss), party, { training: 60 }) * m.att > defStrength(t) * m.def * 1.25) { exileSeize(fid, t.id, party.map((o) => o.name), F.household.troops); if (!F.guest) return; }
+        const bar = dest.size && !dest.has(t.id) ? 1.7 : 1.25;   // a lord with a destiny does not scatter his strength on stray towns
+        if (attStrength(F.household.troops * (1 - m.loss), party, { training: 60 }) * m.att > defStrength(t) * m.def * bar) { exileSeize(fid, t.id, party.map((o) => o.name), F.household.troops); if (!F.guest) return; }
       }
     }
     if (F.favor < 12 && Math.random() < 0.5) {
@@ -982,7 +1029,7 @@ const Game = (() => {
     p.owner = toFid;
     for (const o of allOfficers()) if (o.city === cityId && o.faction === prev && prev && !o.captive && toFid !== prev) { o.faction = null; o.loyalty = 0; }
     if (prev && S.factions[prev].alive && !factionProvinces(prev).length && !S.factions[prev].guest) {
-      if (!(S.factions[prev].wanderer && goGuest(prev, cityId, toFid, p.troops * 0.2, p.gold * 0.2))) dissolveHouse(prev);
+      if (!(S.factions[prev].wanderer && goGuest(prev, cityId, toFid, p.troops * 0.2, p.gold * 0.2)) && !fleeToEmpty(prev, cityId, p.troops * 0.3, p.gold * 0.3)) dissolveHouse(prev);
     }
   }
   function processGuests() {
@@ -996,7 +1043,7 @@ const Game = (() => {
         continue;
       }
       F.exileTotal = (F.exileTotal || 0) + 1;   // counted across every host and every stint
-      if (months >= 144 || F.exileTotal >= 180) { notice(`After long years in exile, the followers of ${F.name} drift away and the house is no more.`, 'hist'); dissolveHouse(F.id); continue; }
+      if (months >= (F.wanderer ? 240 : 144) || F.exileTotal >= (F.wanderer ? 300 : 180)) { notice(`After long years in exile, the followers of ${F.name} drift away and the house is no more.`, 'hist'); dissolveHouse(F.id); continue; }
       // the household eats from the host's granary; a big camp wears out its welcome
       F.household = F.household || { troops: 0, gold: 0 };
       const seatP = prov(hostSeat(F.id));
@@ -1309,6 +1356,7 @@ const Game = (() => {
     ceasefire: (a, b, months) => { const d = dip(a, b); d.status = 'ceasefire'; d.until = S.turn + months; },
     ally: (a, b, months) => { const d = dip(a, b); d.status = 'alliance'; d.until = S.turn + months; },
     setTitle: (fid, tier) => { const F = S.factions[fid]; if (F) F.title = tier; },
+    goGuestTo: (fid, hostId, troops = 0, gold = 0) => { const r = rulerOf(fid); return r ? goGuest(fid, r.city, null, troops, gold, hostId) : false; },
     killQuiet: (name, cause) => { const o = off(name); if (o) killOfficer(o, cause, false); },
     prestige: (fid, n) => { const F = S.factions[fid]; if (F) F.prestige = clamp((F.prestige || 0) + n, 0, 100); },
     gold: (fid, n) => { const p = factionProvinces(fid)[0]; if (p) p.gold += n; },
@@ -1785,9 +1833,10 @@ const Game = (() => {
         const t = `Famine in ${pname(p.id)}: ${fmt(lost)} soldiers deserted for lack of food.`;
         if (p.owner === S.player) notice(t, 'bad'); else log(t, 'bad');
       }
-      const popCap = [0, 260000, 520000, 900000][provData(p.id).tier];
-      const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.4 ? Math.floor(popCap * 0.0008) : 0;   // refugees return to orderly, half-empty land
-      p.pop += Math.floor(p.pop * 0.006 * (isSpring() ? 1.5 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
+      const popCap = popCapOf(p);
+      const atPeace = !S.adj[p.id].some((n) => prov(n).owner && prov(n).owner !== p.owner && canAttack(p.owner, prov(n).owner));
+      const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.6 ? Math.floor(popCap * 0.0015) : 0;   // refugees return to orderly, half-empty land
+      p.pop += Math.floor(p.pop * 0.008 * (isSpring() ? 1.5 : 1) * (atPeace ? 1.5 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
       // order: a garrison and a governor keep the peace; neglect breeds revolt
       const garrisoned = p.troops >= p.pop / 60 || officersIn(p.id, p.owner).length > 0;
       const realm = factionProvinces(p.owner).length;
@@ -1811,7 +1860,7 @@ const Game = (() => {
         const t = `${pname(p.id)} rises in revolt against ${fname(owner)} and throws off its garrison!`;
         (owner === S.player) ? notice(t, 'bad', { major: true }) : log(t, 'bad');
         S.factions[owner].lastLoss = S.turn;
-        if (S.factions[owner].alive && !factionProvinces(owner).length && !S.factions[owner].guest) { if (!(S.factions[owner].wanderer && goGuest(owner, p.id, null))) dissolveHouse(owner); }
+        if (S.factions[owner].alive && !factionProvinces(owner).length && !S.factions[owner].guest) { if (!(S.factions[owner].wanderer && goGuest(owner, p.id, null)) && !fleeToEmpty(owner, p.id, p.troops * 0.3, 0)) dissolveHouse(owner); }
         continue;
       }
       // summer floods on the lower Yellow River
@@ -1931,7 +1980,7 @@ const Game = (() => {
     return troops * (0.5 + best(party, 'war', MILITIA) / 100) * (0.7 + best(party, 'ldr', MILITIA) / 250) * (0.7 + p.training / 300);
   }
   // How many soldiers a city can feed and draw from its population
-  const sustainCap = (p) => Math.floor(Math.min(p.agri * 50, p.pop * 0.3));
+  const sustainCap = (p) => Math.floor(Math.min(p.agri * 50, p.pop * 0.22));
   function aiParty(pid) {
     let idle = idleOfficers(pid).filter((o) => !isRuler(o)).sort((x, y) => y.war - x.war);
     if (!idle.length) idle = idleOfficers(pid);
@@ -2269,6 +2318,7 @@ const Game = (() => {
         const rich = p.gold > 4000;
         const builder = has(fid, 'builder');
         if (p.order < (phase === 'rising' ? 55 : 70) && p.gold >= COST.pacify) pacify(p.id, o.name);
+        else if (p.gold >= COST.resettle && p.order >= 40 && p.pop < popCapOf(p) * (p.gold > 4000 ? 0.85 : 0.5)) resettle(p.id, o.name);
         else if (p.gold >= COST.develop && (foodMonths < 8 || p.agri < 200) && p.agri < 999) develop(p.id, o.name, 'agri');
         else if (rich && foodMonths < 12) buyFood(p.id, 2000), search(p.id, o.name);
         else if (needFleet && p.gold >= COST.ships) buildShips(p.id, o.name);
@@ -2327,7 +2377,7 @@ const Game = (() => {
     decide, objectiveStatus, destinyTargets,
     itemsOf, hiddenItemsIn, itemData, bestow, ITEMS, governorOf, leaderHouse, houseItems, giftItem, itemValue,
     SCENARIOS, undoMonth, canUndo, slotInfo, BIOS, CITY_NOTES, detectPhase,
-    pacify, setPosture, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
+    pacify, resettle, setPosture, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
     hostSeat, exileServe, exilePetition, petitionChance, exileRecruit, exileRaise, exileFight, exileSeekPatron, exileTargets, exileSeize,
     getOption: (k) => !!(S && S.options && S.options[k]),
     setOption: (k, v) => { if (S) { S.options = S.options || {}; S.options[k] = !!v; log(`${k === 'historicalDeaths' ? 'Scripted historical deaths' : k} ${v ? 'enabled' : 'disabled'}.`, 'sys'); } },

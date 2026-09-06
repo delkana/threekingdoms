@@ -47,7 +47,7 @@ const EVENTS = [
   },
   {
     id: 'xinye-grant', title: 'Liu Biao grants Xinye',
-    from: [201, 1], to: [203, 12],
+    from: [199, 1], to: [212, 12],
     when: (E, S) => {
       const lb = S.factions.liubei, lbi = S.factions.liubiao;
       if (!lb || !lb.alive || !lbi || !lbi.alive) return null;
@@ -1362,6 +1362,146 @@ const EVENTS = [
           return `Zhang Lu comes out of Hanzhong and kneels, the granaries sealed and full behind him. ${E.rulerOf(ctx.g).name}, moved, makes him a marquis and treats his officers with honour. The Celestial Masters\u2019 state passes without a fire lit.`;
         } },
         { label: 'Hold the Yangping pass', ai: 0.4, apply: (E, S, ctx) => { const p = S.provinces.hanzhong; p.defense = Math.min(999, p.defense + 150); p.troops += 5000; E.prestige('zhanglu', 5); E.warTarget(ctx.g, 'zhanglu', 18); return `Zhang Lu\u2019s brother has his way. The pass is manned, the granaries guarded, and Hanzhong waits for the storm.`; } },
+      ],
+    },
+  },
+  // ---------------------------------------------------------- Kong Rong, Tao Qian, Liu Yao
+  {
+    id: 'siege-of-beihai', title: 'The siege of Beihai',
+    from: [192, 1], to: [196, 12],
+    when: (E, S) => {
+      const K = S.factions.kongrong, L = S.factions.liubei; if (!K || !K.alive || K.guest || S.provinces.beihai.owner !== 'kongrong' || !L || !L.alive) return null;
+      const tc = S.officers['Taishi Ci']; if (!tc || tc.faction !== 'kongrong' || tc.captive) return null;
+      return Math.random() < 0.15 ? { fid: 'kongrong' } : null;
+    },
+    decision: {
+      house: 'kongrong',
+      prompt: () => `Yellow Turban remnants under Guan Hai surround Beihai. The granaries are low and the walls thinly held. Taishi Ci offers to ride through the lines by night and beg help from Liu Bei, whom Kong Rong has never met. "Does Kong Rong know that I exist?" Liu Bei will say, and come.`,
+      options: [
+        { label: 'Send Taishi Ci to Liu Bei', ai: 0.7, apply: (E, S) => { const b = S.provinces.beihai; b.troops += 3000; b.order = Math.min(100, b.order + 10); E.shiftRelation('kongrong', 'liubei', 40); E.prestige('liubei', 10); E.prestige('kongrong', 3); flags(S).beihaiRelieved = S.turn; return `Taishi Ci shoots his way through the besiegers and returns with Liu Bei\u2019s relief column. Guan Hai\u2019s rabble scatters, and the scholar-lord and the sandal-maker become friends for life.`; } },
+        { label: 'Hold out alone', ai: 0.3, apply: (E, S) => { const b = S.provinces.beihai; b.troops = Math.max(500, b.troops - 2000); b.order = Math.max(0, b.order - 10); E.prestige('kongrong', 5); return `Kong Rong will beg no one. Beihai holds through a hungry winter, and the bandits drift away in spring; the city is thinner for it.`; } },
+      ],
+    },
+  },
+  {
+    id: 'kong-rong-court', title: 'Kong Rong goes to court',
+    from: [196, 1], to: [280, 12],
+    when: (E, S) => {
+      const K = S.factions.kongrong; if (!K || !K.alive || K.guest || K.ruler !== 'Kong Rong' || E.factionProvinces('kongrong').length > 2) return null;
+      const H = Object.values(S.factions).find((f) => f.alive && f.hasEmperor && !f.raider && f.id !== 'kongrong'); if (!H) return null;
+      const N = Object.values(S.factions).filter((f) => f.alive && !f.raider && f.id !== 'kongrong' && E.bordering(f.id, 'kongrong')).sort((a, b) => E.totalTroops(b.id) - E.totalTroops(a.id))[0];
+      return N && Math.random() < 0.06 ? { fid: 'kongrong', h: H.id, n: N.id } : null;
+    },
+    decision: {
+      house: 'kongrong',
+      prompt: (E, S, ctx) => `An edict names Kong Rong Minister of Works at the Emperor\u2019s court under ${E.fname(ctx.h)}. Beihai is poor, pressed by ${E.fname(ctx.n)}, and Kong Rong was never a soldier. At court he could argue the classics with the finest minds of the age; here he can only lose slowly.`,
+      options: [
+        { label: 'Take office at court', ai: 0.5, apply: (E, S, ctx) => {
+          const cities = E.factionProvinces('kongrong').map((p) => p.id); const offs = E.factionOfficers('kongrong').map((o) => o.name).filter((n) => n !== 'Kong Rong');
+          for (const c of cities) E.transferCity(c, ctx.n); for (const n of offs) E.joinHouse(n, ctx.n, 60, null, true);
+          E.joinHouse('Kong Rong', ctx.h, 80, seatOf(E, ctx.h), true); if (S.factions.kongrong.alive) E.dissolveHouse('kongrong');
+          E.prestige(ctx.h, 5);
+          return `Kong Rong hands Beihai to ${E.fname(ctx.n)} and rides to court with his books. He will be the wittiest man in the capital for a decade, and it will kill him.`;
+        } },
+        { label: 'Stay in Beihai', ai: 0.5, apply: (E) => { E.prestige('kongrong', 5); return `Kong Rong declines with an essay on the duties of a magistrate that is copied across the realm. Beihai keeps its lord.`; } },
+      ],
+    },
+  },
+  {
+    id: 'que-xuan', title: 'Que Xuan\u2019s false emperor',
+    from: [192, 1], to: [195, 12],
+    when: (E, S) => { const T = S.factions.taoqian; return T && T.alive && !T.guest && S.provinces.xiapi.owner === 'taoqian' && Math.random() < 0.15 ? { fid: 'taoqian' } : null; },
+    decision: {
+      house: 'taoqian',
+      prompt: () => `At Xiapi the bandit Que Xuan has proclaimed himself Son of Heaven with several thousand men. He offers Tao Qian his sword, and his soldiers, if he is left alone. Every lord who hears of it will judge Tao Qian by what he does next.`,
+      options: [
+        { label: 'Crush the pretender', ai: 0.6, apply: (E, S) => { const x = S.provinces.xiapi; x.troops = Math.max(500, x.troops - 2000); E.prestige('taoqian', 10); return `Tao Qian\u2019s men storm Que Xuan\u2019s camp and send his head to the Emperor. The cost is two thousand soldiers and the gratitude of the realm.`; } },
+        { label: 'Tolerate him for his soldiers', ai: 0.4, apply: (E, S) => { const x = S.provinces.xiapi; x.troops += 6000; x.order = Math.max(0, x.order - 10); E.prestige('taoqian', -15); for (const f of Object.values(S.factions)) if (f.alive && f.id !== 'taoqian') E.shiftRelation('taoqian', f.id, -10); return `Tao Qian takes Que Xuan\u2019s soldiers into his pay and looks the other way. The realm mutters that the Governor of Xu keeps an emperor in his back yard.`; } },
+      ],
+    },
+  },
+  {
+    id: 'taishan-bandits', title: 'The Taishan bandits',
+    from: [190, 6], to: [200, 12],
+    when: (E, S) => { const T = S.factions.taoqian; return T && T.alive && !T.guest && S.provinces.langya.owner === 'taoqian' && Math.random() < 0.12 ? { fid: 'taoqian' } : null; },
+    decision: {
+      house: 'taoqian',
+      prompt: () => `Zang Ba, Sun Guan and the hill men of Mount Tai offer to fight for Tao Qian for pay and a free hand in Langya. They are hard soldiers and worse subjects.`,
+      options: [
+        { label: 'Hire the hill men', ai: 0.65, apply: (E, S) => { const l = S.provinces.langya; l.troops += 8000; l.training = Math.max(l.training, 55); l.order = Math.max(0, l.order - 15); const zb = S.officers['Zang Ba']; if (zb && zb.faction === 'taoqian') { zb.loyalty = Math.min(100, zb.loyalty + 20); zb.rank = Math.max(zb.rank || 0, 1); } else if (!zb) E.addOfficer({ name: 'Zang Ba', ldr: 76, war: 78, int: 40, pol: 35, chr: 45, faction: 'taoqian', city: 'langya', loyalty: 70, born: 165 }); return `Eight thousand Taishan bandits march into Langya under Zang Ba\u2019s banner. The garrison is doubled; the magistrates lock their doors.`; } },
+        { label: 'Refuse them', ai: 0.35, apply: (E, S) => { E.prestige('taoqian', 5); S.provinces.langya.order = Math.min(100, S.provinces.langya.order + 5); return `Tao Qian will not pay bandits to guard his people. Langya stays quiet and thinly held.`; } },
+      ],
+    },
+  },
+  {
+    id: 'taishi-ci-road', title: 'Taishi Ci\u2019s road',
+    from: [194, 1], to: [280, 12],
+    when: (E, S) => {
+      const tc = S.officers['Taishi Ci']; if (!tc || tc.captive || (tc.faction && tc.faction !== 'kongrong')) return null;
+      const Y = S.factions.liuyao; if (!Y || !Y.alive || Y.guest || !E.factionProvinces('liuyao').length) return null;
+      return Math.random() < 0.1 ? { seat: seatOf(E, 'liuyao') } : null;
+    },
+    apply: (E, S, ctx) => { E.joinHouse('Taishi Ci', 'liuyao', 60, ctx.seat, true); return `Taishi Ci crosses the river to serve his kinsman Liu Yao at ${E.pname(ctx.seat)}. Liu Yao, warned that the man is a mere brawler, gives him a scout\u2019s post and no command.`; },
+  },
+  {
+    id: 'taishi-ci-duel', title: 'The duel at Shenting',
+    from: [194, 1], to: [280, 12],
+    when: (E, S) => {
+      const tc = S.officers['Taishi Ci']; if (!tc || tc.captive || tc.faction !== 'liuyao') return null;
+      const Y = S.factions.liuyao, W = S.factions.sunjian; if (!Y || !Y.alive || !W || !W.alive || W.guest || !E.bordering('sunjian', 'liuyao')) return null;
+      const sr = E.rulerOf('sunjian'); if (!sr || sr.war < 80) return null;
+      return Math.random() < 0.15 ? { sun: sr.name } : null;
+    },
+    apply: (E, S, ctx) => {
+      const tc = S.officers['Taishi Ci'], sr = S.officers[ctx.sun];
+      const roll = (o) => Math.pow(o.war, 3) * (0.7 + Math.random() * 0.6);
+      if (roll(sr) >= roll(tc)) { E.joinHouse('Taishi Ci', 'sunjian', 85, seatOf(E, 'sunjian'), true); E.prestige('sunjian', 5); return `Scouting alone, Taishi Ci meets ${ctx.sun} on the road at Shenting and the two fight from horseback till both are unhorsed and each holds a piece of the other\u2019s gear. Taken soon after, Taishi Ci has his bonds cut by ${ctx.sun} himself and swears to serve him.`; }
+      E.prestige('liuyao', 5); tc.loyalty = Math.min(100, tc.loyalty + 20); return `At Shenting Taishi Ci fights ${ctx.sun} to a standstill and rides back with his helmet. Liu Yao, for once, is impressed.`;
+    },
+  },
+  // ---------------------------------------------------------- Liu Bei goes west
+  {
+    id: 'flight-to-jing', title: 'Flight to Jing',
+    from: [194, 1], to: [280, 12],
+    when: (E, S) => {
+      const L = S.factions.liubei; if (!L || !L.alive || L.guest) return null;
+      const mine = E.factionProvinces('liubei'); if (!mine.length || mine.length > 2) return null;
+      const doomed = mine.every((p) => S.adj[p.id].some((n) => { const q = S.provinces[n]; return q.owner && q.owner !== 'liubei' && E.canAttack(q.owner, 'liubei') && q.troops >= p.troops * 2; }));
+      if (!doomed) return null;
+      const J = S.provinces.xiangyang.owner; if (!J || J === 'liubei' || !S.factions[J].alive || S.factions[J].raider || S.factions[J].guest || E.relation('liubei', J) < -10) return null;
+      if (mine.some((p) => S.adj[p.id].some((n) => S.provinces[n].owner === J)) && !E.canAttack(J, 'liubei')) { /* a friendly neighbour: still worth fleeing to */ }
+      return Math.random() < 0.25 ? { fid: 'liubei', j: J } : null;
+    },
+    decision: {
+      house: 'liubei',
+      prompt: (E, S, ctx) => `The enemy outnumbers Liu Bei\u2019s garrisons two to one on every road and the end is a matter of months. Sun Qian counsels flight: "Liu Biao of Jing is your kinsman and honours virtue. Go to him before the walls fall, with your brothers and your army, and live to fight another day."`,
+      options: [
+        { label: 'Abandon the east and go west as a guest', ai: 0.8, apply: (E, S, ctx) => {
+          const mine = E.factionProvinces('liubei'); const troops = Math.floor(mine.reduce((a, p) => a + p.troops, 0) * 0.35), gold = Math.floor(mine.reduce((a, p) => a + p.gold, 0) * 0.4);
+          const names = mine.map((p) => E.pname(p.id));
+          for (const p of mine) { p.owner = null; p.troops = Math.floor(p.troops * 0.5); p.order = 50; p.posture = 'hold'; }   // vacate, keeping the household together
+          E.goGuestTo('liubei', ctx.j, troops, gold); E.shiftRelation('liubei', ctx.j, 20); E.prestige('liubei', 5);
+          return `Liu Bei leaves ${names.join(' and ')} by night with his brothers, his officers and ${troops.toLocaleString()} men who will not be parted from him, and rides west to the court of ${E.fname(ctx.j)}. The people weep on the roads.`;
+        } },
+        { label: 'Stand and fight to the end', ai: 0.2, apply: (E, S) => { const seat = S.provinces[seatOf(E, 'liubei')]; seat.troops += 3000; E.prestige('liubei', 5); return `Liu Bei will not run. "A man of the Han holds his ground." Three thousand volunteers join him for the last stand.`; } },
+      ],
+    },
+  },
+  {
+    id: 'borrowing-jing', title: 'Borrowing Jing',
+    from: [208, 1], to: [280, 12],
+    when: (E, S) => {
+      const W = S.factions.sunjian, L = S.factions.liubei; if (!W || !W.alive || W.guest || !L || !L.alive || S.provinces.jiangling.owner !== 'sunjian') return null;
+      const close = E.treatyStatus('sunjian', 'liubei') === 'alliance' || (L.guest && L.host === 'sunjian');
+      if (!close || (!L.guest && E.factionProvinces('liubei').length > 2) || flags(S).borrowedJing) return null;
+      return Math.random() < 0.12 ? { fid: 'sunjian' } : null;
+    },
+    decision: {
+      house: 'sunjian',
+      prompt: () => `Liu Bei asks the Sun house to lend him Jiangling, "so that the men of Jing who follow me may have a home, and Sun Quan a shield on the middle river." Lu Su urges yes: Liu Bei will fight the north for you. Zhou Yu urges no: he will never give it back.`,
+      options: [
+        { label: 'Lend Jiangling to Liu Bei', ai: 0.55, apply: (E, S) => { flags(S).borrowedJing = S.turn; if (S.factions.liubei.guest) E.wake('liubei', 'jiangling'); else E.transferCity('jiangling', 'liubei'); for (const o of E.officersIn('jiangling', 'sunjian')) o.city = seatOf(E, 'sunjian'); E.shiftRelation('sunjian', 'liubei', 30); E.prestige('sunjian', 5); E.prestige('liubei', 10); return `Sun Quan lends Jiangling to Liu Bei against Lu Su\u2019s surety. Liu Bei has a base on the middle Yangtze at last, and the road to Shu lies open before him.`; } },
+        { label: 'Refuse him', ai: 0.45, apply: (E, S) => { flags(S).borrowedJing = 'refused'; E.shiftRelation('sunjian', 'liubei', -15); return `Sun Quan keeps Jiangling. Liu Bei bows and says nothing, and Zhou Yu watches him go.`; } },
       ],
     },
   },
