@@ -565,12 +565,13 @@ const BATTLE = (() => {
       const worthK = (side === 'A' ? ({ rash: 0.5, bold: 0.55, cautious: 0.95, steady: 0.8 }[tp] || 0.7) : ({ rash: 0.7, bold: 0.75, cautious: 1.1, steady: 0.9 }[tp] || 0.9)) * (own === 'unled' ? 1.1 : 1);   // leaderless men are a little more careful
       const worth = (v) => strength(B, u, ctx) >= strength(B, v, ctx) * (1 + defenceBonus(B, v)) * worthK;
       // a worn unit under a cautious commander pulls back out of reach
-      if (tp === 'cautious' && (u.troops < u.max * 0.4 || u.morale < 40) && attackable.length && !insideWalls(terrainAt(B, u.c, u.r))) {
+      const guardsHeart = side === 'D' && u.c === 6 && u.r === 5;
+      if (tp === 'cautious' && !guardsHeart && (u.troops < u.max * 0.4 || u.morale < 40) && attackable.length && !insideWalls(terrainAt(B, u.c, u.r))) {
         const away = Object.values(reach(B, u, u.mp)).filter((d) => d.cost > 0 && !foes.some((f) => hexDist(f.c, f.r, d.c, d.r) <= 1)).sort((a, b) => Math.min(...foes.map((f) => hexDist(f.c, f.r, b.c, b.r))) - Math.min(...foes.map((f) => hexDist(f.c, f.r, a.c, a.r))))[0];
         if (away) { moveUnit(B, u, away.c, away.r); log(B, `${label(u, ctx)} draws back out of reach.`, side === 'A' ? 'att' : 'def'); continue; }
       }
       // a rash commander chases a broken enemy wherever it runs
-      if (tp === 'rash' && !attackable.length && kindOf(u) !== 'eng') {
+      if (tp === 'rash' && !guardsHeart && !attackable.length && kindOf(u) !== 'eng') {
         const prey = foes.filter((f) => f.morale < 30 && visibleTo(B, side, f) && hexDist(u.c, u.r, f.c, f.r) <= 4 && !insideWalls(terrainAt(B, f.c, f.r))).sort((a, b) => hexDist(u.c, u.r, a.c, a.r) - hexDist(u.c, u.r, b.c, b.r))[0];
         if (prey) { const step = stepToward(B, u, neighbours(prey.c, prey.r, m.w, m.h).filter(([c, r]) => !unitAt(B, c, r)).map(([c, r]) => key(c, r))); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1); if (again.length && !u.acted) { melee(B, u, again[0], ctx); continue; } } }
       }
@@ -614,13 +615,13 @@ const BATTLE = (() => {
           }
         }
         const inside = foes.some((f) => insideWalls(terrainAt(B, f.c, f.r)));
-        if (breached && !centreUnit && insideWalls(t) && (t !== 'G' || inside) && !attackable.length) {
+        if (!centreUnit && insideWalls(t) && (t !== 'G' || inside || mine.filter((f) => insideWalls(terrainAt(B, f.c, f.r)) && terrainAt(B, f.c, f.r) !== 'G').length === 0) && !attackable.length) {
           const guardian = mine.filter((f) => !f.naval && insideWalls(terrainAt(B, f.c, f.r)) && (terrainAt(B, f.c, f.r) !== 'G' || inside) && !foes.some((e) => hexDist(e.c, e.r, f.c, f.r) === 1)).sort((a, b) => hexDist(a.c, a.r, 6, 5) - hexDist(b.c, b.r, 6, 5) || (terrainAt(B, a.c, a.r) === 'G') - (terrainAt(B, b.c, b.r) === 'G'))[0];
           if (guardian === u) { const step = stepToward(B, u, [centre]); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); if (targetsFor(B, u).length && canShoot(B, u) && !u.acted) fight(B, u, targetsFor(B, u)[0], ctx, true); continue; } }
         }
         if (targets.length && (!attackable.length || (tp === 'cautious' && canShoot(B, u) && !worth(attackable[0])))) { if (canShoot(B, u) || !attackable.length) { fight(B, u, targets[0], ctx, canShoot(B, u)); continue; } }   // volley from the walls
         if (attackable.length && (worth(attackable[0]) || !insideWalls(t) || tp === 'rash')) { melee(B, u, attackable[0], ctx); continue; }
-        if (!insideWalls(t)) { const goal = stepToward(B, u, gates.concat([centre]).filter((k) => !unitAt(B, +k.split(',')[0], +k.split(',')[1]))); if (goal) { const [c, r] = goal.split(',').map(Number); moveUnit(B, u, c, r); } }
+        if (!insideWalls(t)) { const heartEmpty = !unitAt(B, 6, 5) && !mine.some((f) => f !== u && insideWalls(terrainAt(B, f.c, f.r)) && terrainAt(B, f.c, f.r) !== 'G'); const goal = stepToward(B, u, (heartEmpty ? [centre] : gates.concat([centre])).filter((k) => !unitAt(B, +k.split(',')[0], +k.split(',')[1]))); if (goal) { const [c, r] = goal.split(',').map(Number); moveUnit(B, u, c, r); } }
         continue;
       }
       // attacker
@@ -649,12 +650,16 @@ const BATTLE = (() => {
         if (goals.length && !u.naval) { const step = stepToward(B, u, goals); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); } }
         continue;   // wait for the reinforcements
       }
-      if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G')) { melee(B, u, attackable[0], ctx); continue; }
+      // the heart of the city, empty and within reach: take it
+      if (!unitAt(B, 6, 5) && !u.naval && kindOf(u) !== 'eng') { const dh = reach(B, u, u.mp)[centre]; if (dh && dh.cost > 0) { moveUnit(B, u, 6, 5); log(B, `${label(u, ctx)} seizes the heart of ${ctx.pname(B.city)}!`, 'att'); continue; } }
+      if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G' || (anyGateOpen(B) && hexDist(attackable[0].c, attackable[0].r, 6, 5) <= 1))) { melee(B, u, attackable[0], ctx); continue; }
       const ram = rammableFor(B, u); if (ram.length) { ramGate(B, u, ram[0][0], ram[0][1]); continue; }
       // march: through an open gate to the centre, or up to the nearest gate (a hex beside it, since barred gates cannot be entered)
       const m2 = HEXMAPS[B.city];
       const besideGates = []; for (const g of gates) { const [gc, gr] = g.split(',').map(Number); if (gateOpen(B, gc, gr)) { if (!unitAt(B, gc, gr)) besideGates.push(g); } else for (const [nc, nr] of neighbours(gc, gr, m2.w, m2.h)) if (!insideWalls(terrainAt(B, nc, nr)) && !unitAt(B, nc, nr)) besideGates.push(key(nc, nr)); }
-      const goals = anyGateOpen(B) ? [centre].concat(besideGates) : besideGates;
+      const heartRing = neighbours(6, 5, m2.w, m2.h).filter(([c, r]) => !unitAt(B, c, r) && insideWalls(terrainAt(B, c, r))).map(([c, r]) => key(c, r));
+      const goals = anyGateOpen(B) ? (unitAt(B, 6, 5) ? heartRing.concat(besideGates.filter((g) => gateOpen(B, +g.split(',')[0], +g.split(',')[1]))) : [centre]) : besideGates;
+      if (anyGateOpen(B) && !goals.length) goals.push(...besideGates);
       const step = stepToward(B, u, goals);
       if (step) { const [c, r] = step.split(',').map(Number); if (moveUnit(B, u, c, r)) { const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1); const ram2 = rammableFor(B, u); if (again.length && !u.acted && (worth(again[0]) || terrainAt(B, again[0].c, again[0].r) === 'G')) melee(B, u, again[0], ctx); else if (ram2.length && !u.acted) ramGate(B, u, ram2[0][0], ram2[0][1]); } }
       else if (attackable.length) melee(B, u, attackable[0], ctx);
@@ -718,8 +723,10 @@ const BATTLE = (() => {
     if (!A.length) { B.over = { result: 'annihilated' }; log(B, `The besieging army is destroyed.`, 'def'); return; }
     if (!D.length) { B.over = { result: 'captured' }; log(B, `The last defenders fall. ${ctx.pname(B.city)} is taken!`, 'att'); return; }
     const dInside = D.filter((u) => insideWalls(terrainAt(B, u.c, u.r)));
-    const centreHeld = A.some((u) => u.c === 6 && u.r === 5) && (!dInside.length || sideTroops(B, 'D') < sideTroops(B, 'A') * 0.3);
-    if (centreHeld) { B.over = { result: 'captured' }; log(B, `The attackers hold the heart of ${ctx.pname(B.city)}. The city has fallen!`, 'att'); }
+    const onHeart = A.some((u) => u.c === 6 && u.r === 5);
+    const centreHeld = onHeart && (!dInside.length || sideTroops(B, 'D') < sideTroops(B, 'A') * 0.3);
+    if (centreHeld) { B.over = { result: 'captured' }; log(B, `The attackers hold the heart of ${ctx.pname(B.city)}. The city has fallen!`, 'att'); return; }
+    if (onHeart && B.heartHolder === 'A' && B.heartDay != null && B.day > B.heartDay + 1) { B.over = { result: 'captured' }; log(B, `The besiegers have held the heart of ${ctx.pname(B.city)} for two days and nights, and the garrison could not throw them out. The city has fallen!`, 'att'); }
   }
   // the day's weather follows the season: rain in spring and summer, snow in a northern winter
   function rollWeather(B) {
@@ -739,7 +746,7 @@ const BATTLE = (() => {
   }
   function endDay(B, ctx) {
     settleSites(B, ctx);
-    const heartUnit = unitAt(B, 6, 5); if (heartUnit) { if (heartUnit.side !== (B.heartHolder || 'D')) log(B, heartUnit.side === 'A' ? `The banner over the heart of ${ctx.pname(B.city)} comes down; the besiegers raise their own.` : `The garrison tears down the enemy's banner and raises its lord's over the heart of the city again.`, heartUnit.side === 'A' ? 'att' : 'def'); B.heartHolder = heartUnit.side; }
+    const heartUnit = unitAt(B, 6, 5); if (heartUnit) { if (heartUnit.side !== (B.heartHolder || 'D')) log(B, heartUnit.side === 'A' ? `The banner over the heart of ${ctx.pname(B.city)} comes down; the besiegers raise their own.` : `The garrison tears down the enemy's banner and raises its lord's over the heart of the city again.`, heartUnit.side === 'A' ? 'att' : 'def'); if (heartUnit.side !== B.heartHolder || B.heartDay == null) B.heartDay = B.day; B.heartHolder = heartUnit.side; } else if (B.heartHolder === 'A') { B.heartHolder = 'D'; B.heartDay = null; }
     spreadFires(B, ctx);
     // orators steady the men around them
     for (const u of B.units) if (hasSkillOn(B, u, 'orator', ctx)) for (const f of B.units) if (f.side === u.side && hexDist(f.c, f.r, u.c, u.r) <= 2) f.morale = Math.min(100, f.morale + 2);
