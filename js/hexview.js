@@ -144,7 +144,7 @@ const HEXVIEW = (() => {
     for (const u of units) {
       const [cx, cy] = centre(u.c, u.r, s); const k = u.troops >= 1000 ? `${(u.troops / 1000).toFixed(u.troops % 1000 ? 1 : 0)}k` : u.troops; const o = u.officers && u.officers.length ? u.officers[0] + (u.officers.length > 1 ? ` +${u.officers.length - 1}` : '') : '';
       const hull = u.naval ? `<path class="hull" d="M${f1(cx - hw * 0.46)} ${f1(cy + s * 0.5)} Q${f1(cx)} ${f1(cy + s * 0.78)} ${f1(cx + hw * 0.46)} ${f1(cy + s * 0.5)} Z"/><path class="sail" d="M${f1(cx + hw * 0.3)} ${f1(cy - s * 0.52)} L${f1(cx + hw * 0.3)} ${f1(cy - s * 0.95)} L${f1(cx + hw * 0.02)} ${f1(cy - s * 0.58)} Z"/>` : '';
-      g += `<g class="unit-token${u.id === selectedId ? ' sel' : ''}${u.acted ? ' acted' : ''}${u.naval ? ' naval' : ''}" data-unit="${u.id}">${hull}<rect class="unit" x="${f1(cx - hw * 0.42)}" y="${f1(cy - s * 0.5)}" width="${f1(hw * 0.84)}" height="${f1(s)}" rx="${u.naval ? 6 : 3}" fill="${u.color}"/><text class="unit-n" x="${f1(cx)}" y="${f1(cy - 1)}" text-anchor="middle" style="font-size:${f1(s * 0.37)}px">${k}</text>${o ? `<text class="unit-o" x="${f1(cx)}" y="${f1(cy + s * 0.33)}" text-anchor="middle" style="font-size:${f1(s * 0.25)}px">${o}</text>` : ''}${u.morale != null ? `<rect x="${f1(cx - hw * 0.42)}" y="${f1(cy + s * 0.5 - 2)}" width="${f1(hw * 0.84 * u.morale / 100)}" height="2" fill="${u.morale > 50 ? '#9fd69f' : u.morale > 25 ? '#e0b55a' : '#e29a8f'}"/>` : ''}</g>`;
+      g += `<g class="unit-token${u.id === selectedId ? ' sel' : ''}${u.acted ? ' acted' : ''}${u.naval ? ' naval' : ''}" data-unit="${u.id}">${hull}<rect class="unit" x="${f1(cx - hw * 0.42)}" y="${f1(cy - s * 0.5)}" width="${f1(hw * 0.84)}" height="${f1(s)}" rx="${u.naval ? 6 : 3}" fill="${u.color}"/><text class="unit-n" x="${f1(cx)}" y="${f1(cy - 1)}" text-anchor="middle" style="font-size:${f1(s * 0.37)}px">${k}</text>${o ? `<text class="unit-o" x="${f1(cx)}" y="${f1(cy + s * 0.33)}" text-anchor="middle" style="font-size:${f1(s * 0.25)}px">${o}</text>` : ''}${u.kind && u.kind !== 'inf' ? `<text class="unit-k" x="${f1(cx - hw * 0.38)}" y="${f1(cy - s * 0.18)}" style="font-size:${f1(s * 0.34)}px">${{ cav: '♞', arc: '➶', eng: '⚙' }[u.kind] || ''}</text>` : ''}${u.morale != null ? `<rect x="${f1(cx - hw * 0.42)}" y="${f1(cy + s * 0.5 - 2)}" width="${f1(hw * 0.84 * u.morale / 100)}" height="2" fill="${u.morale > 50 ? '#9fd69f' : u.morale > 25 ? '#e0b55a' : '#e29a8f'}"/>` : ''}</g>`;
     }
     return g + '</g>';
   }
@@ -158,7 +158,16 @@ const HEXVIEW = (() => {
     }
     return g + '</g>';
   }
+  // fog: hexes the viewer cannot see; fire: burning and burnt ground; flash: hexes where blows fell today
+  const fogSvg = (cells, s) => '<g class="fog">' + cells.map(([c, r]) => { const [cx, cy] = centre(c, r, s); return `<polygon class="fog-hex" points="${hexPts(cx, cy, s)}"/>`; }).join('') + '</g>';
+  function fireSvg(fires, burnt, s) {
+    let g = '<g class="fires">';
+    for (const k of Object.keys(burnt || {})) { const [c, r] = k.split(',').map(Number); const [cx, cy] = centre(c, r, s); g += `<polygon class="burnt-hex" points="${hexPts(cx, cy, s)}"/>`; }
+    for (const k of Object.keys(fires || {})) { const [c, r] = k.split(',').map(Number); const [cx, cy] = centre(c, r, s); g += `<polygon class="fire-hex" points="${hexPts(cx, cy, s)}"/><text class="fire-glyph" x="${f1(cx)}" y="${f1(cy + s * 0.3)}" text-anchor="middle" style="font-size:${f1(s * 0.9)}px">🔥</text>`; }
+    return g + '</g>';
+  }
+  const flashSvg = (keys, s) => '<g class="flashes">' + [...new Set(keys || [])].map((k) => { const [c, r] = k.split(',').map(Number); const [cx, cy] = centre(c, r, s); return `<polygon class="flash-hex" points="${hexPts(cx, cy, s * 0.9)}"/>`; }).join('') + '</g>';
   // highlight hexes (reachable moves, attack targets, gates to ram)
   function highlightSvg(cells, s, cls) { return cells.map(([c, r]) => { const [cx, cy] = centre(c, r, s); return `<polygon class="hl ${cls}" points="${hexPts(cx, cy, s)}" data-c="${c}" data-r="${r}"/>`; }).join(''); }
-  return { TERRAIN, render, centre, hexPts, unitsSvg, highlightSvg, sitesSvg, byId };
+  return { TERRAIN, render, centre, hexPts, unitsSvg, highlightSvg, sitesSvg, fogSvg, fireSvg, flashSvg, byId };
 })();

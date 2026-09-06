@@ -491,6 +491,25 @@ kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); 
 .site-glyph { fill: #f0e6d0; font-family: var(--serif); pointer-events: none; text-shadow: 0 1px 2px #000; }
 .site.ruined .site-ring { stroke-dasharray: 3 2; opacity: 0.7; } .site.ruined .site-glyph { opacity: 0.45; } .site-x { stroke: #e29a8f; stroke-width: 2; }
 .sites-list .kv { align-items: center; } .sites-list .glyph { font-size: 16px; margin-right: 6px; }
+.unit-k { fill: #fff; font-family: var(--serif); pointer-events: none; text-shadow: 0 1px 2px #000; }
+.fog-hex { fill: rgba(10, 8, 6, 0.55); pointer-events: none; }
+.fire-hex { fill: rgba(255, 120, 30, 0.45); stroke: rgba(255, 200, 80, 0.8); stroke-width: 1.2; pointer-events: none; animation: flicker 0.9s ease-in-out infinite alternate; }
+.fire-glyph { pointer-events: none; }
+.burnt-hex { fill: rgba(20, 16, 12, 0.55); pointer-events: none; }
+.flash-hex { fill: none; stroke: rgba(255, 90, 70, 0.9); stroke-width: 2.4; pointer-events: none; animation: pulse 1.2s ease-out infinite; }
+@keyframes flicker { from { opacity: 0.7; } to { opacity: 1; } }
+@keyframes pulse { 0% { opacity: 1; stroke-width: 3; } 100% { opacity: 0.15; stroke-width: 1; } }
+.hl.fire { fill: rgba(255, 140, 40, 0.35); stroke: rgba(255, 200, 80, 0.9); }
+.bt-log .sum { color: var(--muted); font-style: italic; }
+.bt-weather { color: #cfe6f0; font-size: 13px; }
+#battle-screen.hide-log .bt-log { display: none; }
+#bt-logtoggle { display: none; }
+@media (max-width: 640px) {
+  #bt-logtoggle { display: inline-block; }
+  .bt-head { gap: 8px; padding: 4px 8px; } .bt-head h2 { font-size: 15px; } .bt-food { display: none; }
+  .bt-side { max-height: 52%; } .bt-actions { padding: 6px 8px; gap: 4px; } .bt-actions button { padding: 10px 4px; }
+  .bt-unit { min-height: 0; padding: 6px 8px; font-size: 12px; } .bt-log { font-size: 12px; }
+}
 .hl { cursor: pointer; stroke-width: 1.4; }
 .hl.move { fill: rgba(120, 200, 120, 0.28); stroke: rgba(150, 240, 150, 0.7); }
 .hl.attack { fill: rgba(230, 80, 60, 0.30); stroke: rgba(255, 120, 100, 0.85); }

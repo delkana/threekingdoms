@@ -1242,7 +1242,8 @@ const UI = (() => {
         ${[1, 2, 3].map((n) => { const info = Game.slotInfo(n); return `<button data-act="save${n}">Save slot ${n}${info ? '' : ' (empty)'}</button><button data-act="load${n}" ${info ? '' : 'disabled'} title="${info ? esc(info.label) : ''}">Load slot ${n}${info ? ': ' + esc(info.label) : ''}</button>`; }).join('')}
         <button class="wide" data-act="hist">${Game.getOption('historicalDeaths') ? '☑' : '☐'} Scripted historical deaths</button>
         <button class="wide" data-act="tactical" title="Fight sieges day by day on the hex battlefield; off, battles resolve at once">${Game.tacticalOn() ? '☑' : '☐'} Tactical battles on the hex maps</button>
-        <button class="wide" data-act="watch" title="In observer mode, replay the AI's sieges day by day">${Game.getOption('watchBattles') ? '☑' : '☐'} Replay AI battles (observer)</button>
+        <button class="wide" data-act="watch" title="Record sieges so battle reports offer a day-by-day replay">${Game.getOption('watchBattles') ? '☑' : '☐'} Record battles for replay</button>
+        <button class="wide" data-act="fog" title="On the battlefield you see two hexes around your units, three from walls, hills and towers; units in forest, hills or mountains are seen only from beside them">${Game.state().options && Game.state().options.fog === false ? '☐' : '☑'} Fog of war in battles</button>
         <button class="wide btn-red" data-act="quit">Quit to title (unsaved progress is lost)</button>
       </div>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, {
@@ -1256,6 +1257,7 @@ const UI = (() => {
       hist: () => { Game.setOption('historicalDeaths', !Game.getOption('historicalDeaths')); renderLog(); showMenu(); },
       tactical: () => { Game.setOption('tactical', !Game.tacticalOn()); renderLog(); showMenu(); },
       watch: () => { Game.setOption('watchBattles', !Game.getOption('watchBattles')); renderLog(); showMenu(); },
+      fog: () => { const S = Game.state(); S.options = S.options || {}; S.options.fog = S.options.fog === false; renderLog(); showMenu(); },
     });
   }
 
@@ -1263,13 +1265,15 @@ const UI = (() => {
   // ---------- the battle screen ----------
   const BT = { city: null, sel: null, mode: null, replay: null, frame: 0, timer: null, asking: false };
   const UICTX = { officer: (n) => Game.off(n) };
-  const BT_S = 26;
+  const BT_S = (typeof window !== 'undefined' && window.innerWidth <= 640) ? 30 : 26;
   function initBattleScreen() {
     $('#bt-close').addEventListener('click', closeBattle);
+    $('#bt-logtoggle').addEventListener('click', () => $('#battle-screen').classList.toggle('hide-log'));
     $('#bt-help').addEventListener('click', () => openModal(`<h3>Fighting a battle</h3>
       <p class="hint">Each turn is a day. Click one of your units, then a green hex to march there (three movement points a day; hills, forest and streams cost two, marsh three, roads one), a red enemy to attack it, or a gold gate to set the ram against it. A barred gate falls after two to five rams depending on the city's walls (a lumber camp in the attacker's hands saves one), or when its defenders break; high walls also shelter their defenders better, make their arrows deadlier and gates harder to storm. Units on walls, gates and hills loose arrows two hexes away without reply. Casualties depend on strength, commanders, training, morale and the ground; a unit breaks when its morale or numbers fail, and its officers may be captured.</p>
       <p class="hint">The attacker moves first each day. Both armies eat: the besiegers from the grain they brought, the garrison from the city. Messengers can be sent once for help; your own neighbouring cities and allies may march, arriving in one to ten days for the attacker and fifteen to twenty for the defender. If the month ends undecided the siege continues next month, and more men and grain can be sent from neighbouring cities in the normal turn. Taking the city's heart, or breaking every defender, wins it; the attacker may withdraw at any time.</p>
       <p class="hint"><b>Champions.</b> When a unit with officers attacks a unit with officers, its best fighter may first call the enemy's out to single combat; the AI does the same to you, and either side may decline at a small cost in morale. The loser's men lose heart, and the loser is wounded for the rest of the battle, or taken, or slain. <b>Letters.</b> Your cleverest officer on the field may write to a wavering enemy officer (loyalty under 70, not a ruler or sworn brother): gold sweetens it, a losing fight and low morale help, and a commander who turns brings his whole unit over. Officers of a broken unit mostly escape; some are captured and a few fall.</p>
+      <p class="hint"><b>Kinds of unit.</b> Foot hold the line. Horse (♞) move five hexes on open ground, charge for a third more on plain and farmland, baulk at woods, slopes and bog, and are feeble against walls. Bowmen (➶) shoot two hexes from anywhere, three from hills, but are weak hand to hand. A siege train (⚙) comes with an officer of siegecraft or a lumber camp at home: each blow on a gate counts double and it batters men on the walls from two hexes, but it is helpless in a melee. <b>Weather and night.</b> Rain slows every step off the road and stills the bows; a northern winter's snow freezes the water, so armies cross the ice and ships are held fast. The besiegers may order an assault by night: harder blows, no arrows, wilder morale, and some units lose their way. <b>Fire.</b> A unit may set fire to forest, farmland or marsh beside it in clear weather; the flames burn three days, spread downwind, drive out and burn whoever stands in them, ruin outstations, and leave ash that gives no cover. <b>Fog and ambush.</b> You see two hexes around your units and three from walls, gates, hills and your watchtower; a unit in forest, hills or mountains is seen only from beside it, and one that strikes from cover unseen ambushes for a third more. <b>Encirclement.</b> Besiegers within three hexes of every road out stop the city's messengers and relief and make the garrison eat double. <b>Sallying.</b> A garrison may march out to meet the enemy in the open on the first day, and fall back behind its walls when the odds turn.</p>
       <p class="hint"><b>Outstations.</b> Mines, villages, pastures, lumber camps, docks, salt pans, watchtowers and markets stand on the map outside the walls. The unit standing on one at day's end holds it: a lumber camp lets attackers break gates in two rams, a watchtower is a strong point, a pasture makes the holder's charges harder, docks let ships land for a step. An attacker standing on one may sack it for loot, ruining it until its lord rebuilds it. <b>Ships.</b> A city with a fleet puts men aboard: most of an army that comes by a river or sea road, a third of one that comes by land, and a quarter of a garrison whose walls stand by the water. Ships move one point per hex on sea, lake and river, loose arrows two hexes away, are hard to attack from the bank, fight with their fleet's skill, and may land on a free shore hex outside the walls, which ends their day and makes them foot soldiers.</p>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal }));
     $('#bt-map').addEventListener('click', (e) => {
@@ -1294,8 +1298,8 @@ const UI = (() => {
       const hl = e.target.closest('.hl');
       if (hl && BT.sel) {
         const c = +hl.dataset.c, r = +hl.dataset.r;
-        const res = hl.classList.contains('ram') ? Game.battleRam(BT.city, BT.sel, c, r) : Game.battleMove(BT.city, BT.sel, c, r);
-        if (!res.ok) toast(res.msg); afterBattleAction();
+        const res = hl.classList.contains('fire') ? Game.battleFire(BT.city, BT.sel, c, r) : hl.classList.contains('ram') ? Game.battleRam(BT.city, BT.sel, c, r) : Game.battleMove(BT.city, BT.sel, c, r);
+        BT.mode = null; if (!res.ok) toast(res.msg); afterBattleAction();
       }
     });
     $('#bt-actions').addEventListener('click', (e) => {
@@ -1304,6 +1308,8 @@ const UI = (() => {
       const B = Game.battleFor(BT.city); if (!B) { closeBattle(); return; }
       if (act === 'end') { const r = Game.battleEndDay(BT.city); afterBattleAction(r.msg !== 'challenge'); }
       else if (act === 'suborn') subornDialog();
+      else if (act === 'fire') { BT.mode = BT.mode === 'fire' ? null : 'fire'; renderBattle(); }
+      else if (act === 'night') { const r = Game.battleNight(BT.city); toast(r.msg); renderBattle(); }
       else if (act === 'sack') { const r = Game.battleSack(BT.city, BT.sel); if (!r.ok) toast(r.msg); afterBattleAction(); }
       else if (act === 'auto') { Game.battleEndDay(BT.city, true); afterBattleAction(true); }
       else if (act === 'month') { Game.battleAutoMonth(BT.city); afterBattleAction(true); }
@@ -1326,6 +1332,14 @@ const UI = (() => {
   function openBattle(city) {
     const B = Game.battleFor(city); if (!B) return;
     BT.city = city; BT.sel = null; BT.mode = null; BT.replay = null;
+    // a defending player decides before the first day whether to hold the walls or march out
+    if (Game.playerSideOf(B) === 'D' && B.day === 0 && !B.lastBlood && !B.sallyAsked) {
+      B.sallyAsked = true; $('#battle-screen').hidden = false; renderBattle();
+      const go = (field) => { const r = Game.battleSally(city, field); closeModal(); if (!r.ok) toast(r.msg); openBattle(city); };
+      openModal(`<h3>The enemy approaches ${esc(Game.pname(city))}</h3><p>${esc(Game.fname(B.attF))} comes with ${fmt(BATTLE.sideTroops(B, 'A'))} men against your ${fmt(BATTLE.sideTroops(B, 'D'))}. Hold the walls, where the ground and the stone favour you, or march out and meet them in the open, where horse and numbers decide and the walls remain to fall back on?</p>
+        <div class="modal-actions"><button data-act="hold">Hold the walls</button><button class="btn btn-gold" data-act="field">⚔ March out</button></div>`, { hold: () => go(false), field: () => go(true) }, true);
+      return;
+    }
     if (Game.playerSideOf(B) && B.phase !== 'player' && !B.over && B.dayInMonth < 30) Game.battleBeginDay(city);
     if (!Game.battleFor(city)) { afterBattleAction(); return; }
     $('#battle-screen').hidden = false;
@@ -1338,23 +1352,29 @@ const UI = (() => {
     const ps = Game.playerSideOf(B); const m = HEXMAPS[B.city];
     const ownerOf = (id) => { const o = S.provinces[id] && S.provinces[id].owner; return o && S.factions[o] ? S.factions[o] : null; };
     const { svg, W, H } = HEXVIEW.render(B.city, BT_S, true, { tints: true, coords: false, ownerOf, ownerColor: (id) => { const f = ownerOf(id); return f ? f.color : FREE_COLOR; } });
-    let extra = '';
+    let extra = HEXVIEW.fireSvg(B.fires, B.burnt, BT_S);
     const sel = BT.sel ? B.units.find((u) => u.id === BT.sel) : null;
     if (sel && sel.side === ps && B.phase === 'player') {
-      extra += HEXVIEW.highlightSvg(BATTLE.canReach(B, sel).map((d) => [d.c, d.r]), BT_S, 'move');
-      if (!sel.acted) { extra += HEXVIEW.highlightSvg(BATTLE.targetsFor(B, sel).map((v) => [v.c, v.r]), BT_S, 'attack'); extra += HEXVIEW.highlightSvg(BATTLE.rammableFor(B, sel), BT_S, 'ram'); }
+      if (BT.mode === 'fire') extra += HEXVIEW.highlightSvg(BATTLE.fireTargets(B, sel), BT_S, 'fire');
+      else {
+        extra += HEXVIEW.highlightSvg(BATTLE.canReach(B, sel).map((d) => [d.c, d.r]), BT_S, 'move');
+        if (!sel.acted) { extra += HEXVIEW.highlightSvg(BATTLE.targetsFor(B, sel).map((v) => [v.c, v.r]), BT_S, 'attack'); extra += HEXVIEW.highlightSvg(BATTLE.rammableFor(B, sel), BT_S, 'ram'); }
+      }
     }
+    if (B.fights && B.fights.length) extra += HEXVIEW.flashSvg(B.fights, BT_S);
+    let fogged = [];
+    if (ps && B.fog) for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) if (!BATTLE.hexVisible(B, ps, c, r)) fogged.push([c, r]);
     // broken gates
     for (const [k, hits] of Object.entries(B.gates)) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
-    const units = B.units.map((u) => ({ ...u, color: unitColor(u.fid) }));
-    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + HEXVIEW.sitesSvg(B.sites, BT_S, (st) => unitColor(st.holder === 'A' ? B.attF : B.defF)) + extra + HEXVIEW.unitsSvg(units, BT_S, BT.sel);
+    const units = B.units.filter((u) => !ps || u.side === ps || BATTLE.visibleTo(B, ps, u)).map((u) => ({ ...u, color: unitColor(u.fid) }));
+    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + HEXVIEW.sitesSvg(B.sites, BT_S, (st) => unitColor(st.holder === 'A' ? B.attF : B.defF)) + extra + (fogged.length ? HEXVIEW.fogSvg(fogged, BT_S) : '') + HEXVIEW.unitsSvg(units, BT_S, BT.sel);
     $('#bt-title').textContent = `The siege of ${Game.pname(B.city)}`; $('#bt-title').title = `Walls ${B.walls || 0}: a gate falls after ${BATTLE.gateHits(B)} rams`;
-    $('#bt-day').textContent = `Day ${B.day}${B.dayInMonth ? ` · day ${B.dayInMonth} of the month` : ''}${B.over ? ' · decided' : B.phase === 'player' ? ' · your orders' : ''}`;
+    $('#bt-day').textContent = `Day ${B.day}${B.dayInMonth ? ` · day ${B.dayInMonth} of the month` : ''}${B.weather === 'rain' ? ' · ☔ rain' : B.weather === 'snow' ? ' · ❄ snow' : ''}${B.night ? ' · 🌙 night' : ''}${BATTLE.encircled(B) ? ' · encircled' : ''}${B.field ? ' · in the field' : ''}${B.over ? ' · decided' : B.phase === 'player' ? ' · your orders' : ''}`;
     const eatA = Math.ceil(BATTLE.sideTroops(B, 'A') * BATTLE.FOOD_PER_MAN_DAY);
     $('#bt-food').textContent = `Walls ${B.walls || 0} (gates fall after ${BATTLE.gateHits(B)} rams) · besiegers' grain ${fmt(Math.floor(B.att.food))} (${eatA ? Math.floor(B.att.food / eatA) : '∞'} days) · city granary ${fmt(S.provinces[B.city].food)}`;
     const sideRow = (side, name) => { const us = BATTLE.sideUnits(B, side); const arriving = B.arrivals.filter((a) => a.side === side && !a.done); return `<div class="side"><span><span class="chip" style="background:${unitColor(side === 'A' ? B.attF : B.defF)}"></span> ${esc(name)}${ps === side ? ' (you)' : ''}</span><b>${us.length} units · ${fmt(BATTLE.sideTroops(B, side))}${arriving.length ? ` · +${fmt(arriving.reduce((a, x) => a + x.troops, 0))} coming (day ${Math.min(...arriving.map((x) => x.day))})` : ''}</b></div>`; };
     $('#bt-sides').innerHTML = sideRow('A', Game.fname(B.attF)) + sideRow('D', B.defF ? Game.fname(B.defF) : 'the town militia');
-    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? sel.officers.map((n) => esc(n) + (B.wounded && B.wounded[n] ? ' <small class="hint">(wounded)</small>' : '')).join(', ') : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men${sel.naval ? ` aboard ship (fleet ${sel.fleet || 0})` : ''} · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.${sel.naval ? ' Ships sail one hex a point on sea, lake and river, shoot two hexes, and may land on a free shore hex, which ends their day.' : ''}${(() => { const st = BATTLE.siteAt(B, sel.c, sel.r); return st ? ` Standing on the ${SITE_TYPES[st.type].label.toLowerCase()}${st.damaged ? ' (ruined)' : ''}, held by ${st.holder === 'A' ? Game.fname(B.attF) : B.defF ? Game.fname(B.defF) : 'the town'}.` : ''; })()}` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
+    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? sel.officers.map((n) => esc(n) + (B.wounded && B.wounded[n] ? ' <small class="hint">(wounded)</small>' : '')).join(', ') : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} ${sel.naval ? 'men aboard ship' : { cav: 'horsemen', arc: 'bowmen', eng: 'men with the siege train' }[sel.kind] || 'foot'}${sel.naval ? ` (fleet ${sel.fleet || 0})` : ''} · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${B.burnt && B.burnt[`${sel.c},${sel.r}`] ? ' (burnt)' : ''}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.${sel.kind && sel.kind !== 'inf' && !sel.naval ? ' ' + BATTLE.KINDS[sel.kind].desc : ''}${sel.naval ? ' Ships sail one hex a point on sea, lake and river, shoot two hexes, and may land on a free shore hex, which ends their day.' : ''}${(() => { const st = BATTLE.siteAt(B, sel.c, sel.r); return st ? ` Standing on the ${SITE_TYPES[st.type].label.toLowerCase()}${st.damaged ? ' (ruined)' : ''}, held by ${st.holder === 'A' ? Game.fname(B.attF) : B.defF ? Game.fname(B.defF) : 'the town'}.` : ''; })()}` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
     else $('#bt-unit').innerHTML = `<div class="hint">${ps ? (B.phase === 'player' ? 'Click one of your units to give it orders.' : 'The day is done; end it to continue.') : 'You are watching this siege.'}</div>`;
     const canAct = ps && !B.over && B.dayInMonth < 30;
     $('#bt-actions').innerHTML = ps ? `
@@ -1363,6 +1383,8 @@ const UI = (() => {
       <button data-act="month" ${canAct ? '' : 'disabled'} title="Your generals fight the rest of the month">Auto to month's end</button>
       <button data-act="msg" ${!B.over && !B[ps === 'A' ? 'att' : 'def'].asked ? '' : 'disabled'} title="Ask neighbouring cities and allies for help">✉ Messengers</button>
       <button data-act="suborn" ${canAct && B.phase === 'player' ? '' : 'disabled'} title="Letters and gold to a wavering enemy officer">✉ Suborn</button>
+      ${sel && sel.side === ps && BATTLE.fireTargets(B, sel).length ? `<button data-act="fire" class="${BT.mode === 'fire' ? 'mode' : ''}" title="Set fire to forest, farmland or marsh beside this unit (not in rain, snow or darkness)">🔥 Set fire${BT.mode === 'fire' ? ': pick a hex' : ''}</button>` : ''}
+      ${ps === 'A' && canAct ? `<button data-act="night" ${B.att.nightNext || B.night ? 'disabled' : ''} title="Tomorrow the army attacks in the dark: harder blows, no arrows, worse morale swings, and some units lose their way">🌙 ${B.att.nightNext ? 'Night assault ordered' : 'Assault by night'}</button>` : ''}
       ${sel && BATTLE.sackable(B, sel) && sel.side === ps ? `<button class="wide btn-red" data-act="sack" title="Put the outstation under this unit to the torch: loot for the army, ruin for the city">🔥 Sack the ${esc(SITE_TYPES[BATTLE.siteAt(B, sel.c, sel.r).type].label.toLowerCase())}</button>` : ''}
       <button class="btn-red" data-act="withdraw" ${B.over ? 'disabled' : ''}>Withdraw</button>${B.dayInMonth >= 30 && !B.over ? '<div class="hint wide" style="grid-column:span 2">The month\\u2019s thirty days are fought. End the month on the map; the siege continues next month.</div>' : ''}` : `<div class="hint" style="grid-column:span 2">An AI siege in progress; it is fought out when the month ends.</div>`;
     if (B.pendingChallenge && ps && !BT.asking) {
@@ -1445,9 +1467,9 @@ const UI = (() => {
     const R = BT.replay; const S = Game.state(); const f = R.replay[BT.frame]; if (!f) return;
     const ownerOf = (id) => { const o = S.provinces[id] && S.provinces[id].owner; return o && S.factions[o] ? S.factions[o] : null; };
     const { svg, W, H } = HEXVIEW.render(R.city, BT_S, true, { tints: true, ownerOf, ownerColor: (id) => { const o = ownerOf(id); return o ? o.color : FREE_COLOR; } });
-    let extra = ''; for (const [k, hits] of Object.entries(f.gates || {})) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
+    let extra = HEXVIEW.fireSvg(f.fires, f.burnt, BT_S) + (f.fights && f.fights.length ? HEXVIEW.flashSvg(f.fights, BT_S) : ''); for (const [k, hits] of Object.entries(f.gates || {})) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
     const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + extra + HEXVIEW.unitsSvg(f.units.map((u) => ({ ...u, color: unitColor(u.fid) })), BT_S, null);
-    $('#bt-title').textContent = `The siege of ${Game.pname(R.city)} (replay)`; $('#bt-day').textContent = `Day ${f.day} of ${R.replay[R.replay.length - 1].day}`; $('#bt-food').textContent = '';
+    $('#bt-title').textContent = `The siege of ${Game.pname(R.city)} (replay)`; $('#bt-day').textContent = `Day ${f.day} of ${R.replay[R.replay.length - 1].day}${f.weather === 'rain' ? ' · ☔ rain' : f.weather === 'snow' ? ' · ❄ snow' : ''}${f.night ? ' · 🌙 night' : ''}`; $('#bt-food').textContent = '';
     $('#bt-sides').innerHTML = `<div class="side"><span><span class="chip" style="background:${unitColor(R.attacker)}"></span> ${esc(Game.fname(R.attacker))}</span><b>${fmt(f.units.filter((u) => u.side === 'A').reduce((a, u) => a + u.troops, 0))}</b></div><div class="side"><span><span class="chip" style="background:${unitColor(R.defender)}"></span> ${R.defender ? esc(Game.fname(R.defender)) : 'the town'}</span><b>${fmt(f.units.filter((u) => u.side === 'D').reduce((a, u) => a + u.troops, 0))}</b></div>`;
     $('#bt-unit').innerHTML = `<div class="hint">${esc(R.lines[R.lines.length - 1] ? R.lines[R.lines.length - 1].text : '')}</div>`;
     $('#bt-actions').innerHTML = `<button data-act="prev">◂ Day</button><button data-act="next">Day ▸</button><button data-act="play">${BT.timer ? '❚❚ Pause' : '▶ Play'}</button><button class="btn-gold" data-act="done">Done</button>`;

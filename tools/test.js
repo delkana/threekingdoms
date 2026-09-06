@@ -125,10 +125,15 @@ test('outstations: every city can raise something; they pay, are held and sacked
   S.provinces.puyang.owner = 'yuanshao'; S.provinces.puyang.troops = 40000; S.provinces.puyang.food = 90000; p.troops = 8000;
   const ys = G.Game.factionOfficers('yuanshao').filter((o) => !G.Game.isRuler(o)).slice(0, 3); for (const o of ys) { o.city = 'puyang'; o.acted = false; }
   assert(G.Game.attack('puyang', 'chenliu', ys.map((o) => o.name), 30000).ok, 'attack'); const B = S.battles.chenliu; assert(B.sites.length === p.sites.length, 'sites on the field');
-  for (let d = 0; d < 30 && S.battles.chenliu; d++) G.Game.battleEndDay('chenliu', true);
-  const sacked = B.log.filter((l) => /to the torch/.test(l.text)).length; assert(sacked >= 1, 'the AI sacks'); assert(p.sites.filter((s) => s.damaged).length === sacked, 'ruins persist');
-  const ruined = p.sites.findIndex((s) => s.damaged); p.owner = 'caocao'; const o2 = G.Game.factionOfficers('caocao').find((o) => !G.Game.isRuler(o) && !o.captive); o2.city = 'chenliu'; o2.acted = false; p.gold = 5000;
-  const rr = G.Game.repairSite('chenliu', o2.name, ruined); assert(rr.ok && !p.sites[ruined].damaged, 'rebuilt: ' + rr.msg);
+  // the player, attacking, sacks an outstation deliberately
+  G.Game.newGame('caocao'); const S2 = G.Game.state(); const q = S2.provinces.puyang; q.owner = 'yuanshao'; q.troops = 9000; q.sites = [];
+  for (const ty of ['village', 'market', 'lumber']) { const a = G.Game.availableSites('puyang').find((x) => x.type === ty); if (a && a.ok) q.sites.push({ type: ty, c: a.spot.c, r: a.spot.r, damaged: false }); }
+  S2.provinces.chenliu.troops = 30000; S2.provinces.chenliu.food = 99999; for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+  assert(G.Game.attack('chenliu', 'puyang', ['Xiahou Dun', 'Cao Ren'], 21000).ok, 'player attack'); const B2 = S2.battles.puyang; G.Game.battleBeginDay('puyang');
+  const st = B2.sites[0]; const u0 = B2.units.find((x) => x.side === 'A' && !x.naval); u0.c = st.c; u0.r = st.r;
+  const sk = G.Game.battleSack('puyang', u0.id); assert(sk.ok && q.sites[0].damaged && B2.log.some((l) => /to the torch/.test(l.text)), 'sack: ' + sk.msg);
+  delete S2.battles.puyang; const ruined = q.sites.findIndex((s) => s.damaged); q.owner = 'caocao'; const o2 = G.Game.factionOfficers('caocao').find((o) => !G.Game.isRuler(o) && !o.captive); o2.city = 'puyang'; o2.acted = false; q.gold = 5000;
+  const rr = G.Game.repairSite('puyang', o2.name, ruined); assert(rr.ok && !q.sites[ruined].damaged, 'rebuilt: ' + rr.msg);
 });
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();

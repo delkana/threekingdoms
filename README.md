@@ -795,8 +795,48 @@ rider's prompt, or decline, which costs relations, dearly if you owed them.
 Favours are repaid by marching in turn or with a gift worth 400 or more (gold,
 or food at a tenth of its weight); the AI repays with gifts when it has gold.
 
-**Watching.** In observer mode, **Replay AI battles** records each siege so the
-month's battle reports offer a day-by-day replay on the map.
+**Kinds of unit.** An army is foot, horse and bowmen: a tenth of the column rides
+(three tenths from horse country, a tenth more with a pasture) and a fifth carry
+bows. Horse (♞) move five hexes on open ground, charge for a third more on plain
+and farmland (more with an officer of Cavalry), baulk at woods, slopes and bog,
+and are feeble against walls. Bowmen (➶) shoot two hexes from anywhere, three
+from hills, but are weak hand to hand. A siege train (⚙) marches with an officer
+of Siegecraft or from a city with a lumber camp: each blow on a gate counts
+double, it batters men on the walls from two hexes, and it is helpless in a
+melee. Siegecraft also saves a ram on every gate, Guardians hold walls a tenth
+better, Orators steady the men around them, Naval officers fight better afloat,
+and Stratagem sharpens letters and ambushes.
+
+**Weather and night.** Each day's weather follows the season: rain (likelier in
+spring and summer) slows every step off the road and stills the bows; snow in a
+northern winter freezes the water, so armies cross the ice and ships are held
+fast. The besiegers may order an assault by night: harder blows, no arrows,
+wilder swings of morale, and a tenth of their units lose their way.
+
+**Fire.** A unit may set fire to forest, farmland or marsh beside it in clear
+weather. Flames burn three days, spread downwind, burn and drive out whoever
+stands in them, ruin outstations, cost the city food for each field burned, and
+leave ash that gives no cover. Rain puts them out.
+
+**Fog and ambush.** With fog of war on (the ≡ menu), each side sees two hexes
+around its units and three from walls, gates, hills and its watchtower; a unit
+in forest, hills or mountains is seen only from beside it. A unit that strikes
+from cover while unseen ambushes for a third more and shakes its victim.
+
+**Encirclement.** Besiegers within three hexes of every road out of the city stop
+its messengers and relief columns and make the garrison eat double. Idle
+besiegers picket the roads while they wait for reinforcements.
+
+**The field.** A garrison may meet the enemy in the open instead of on the walls:
+the player chooses on the first day, an AI garrison does so when it is nearly as
+strong and has a fierce champion, and a city's standing posture of *sally* does
+the same. A sallied garrison fights while the odds hold and falls back behind
+its walls when they turn.
+
+**Watching.** With **Record battles for replay** on, every siege is recorded and
+its report offers a day-by-day replay on the map, in player games as well as in
+observer mode. Each day's log ends with a summary of the fallen, and hexes where
+blows fell that day pulse on the map.
 
 ## Population
 
