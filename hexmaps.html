@@ -47,6 +47,7 @@
     .dep { margin-top: 10px; }
     .dep select { font-family: var(--serif); background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12.5px; }
     .dep .line { font-size: 12.5px; margin: 4px 0; line-height: 1.4; }
+    .site-ring { fill: rgba(0,0,0,0.35); stroke-width: 2; } .site-glyph { fill: #f0e6d0; font-family: var(--serif); pointer-events: none; } .site.ruined .site-glyph { opacity: 0.45; } .site-x { stroke: #e29a8f; stroke-width: 2; }
     .coord { font-family: var(--serif); font-size: 7.5px; fill: rgba(255,255,255,0.4); }
     .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 22px; }
     .thumb { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px; cursor: pointer; text-align: center; font-size: 12px; }
@@ -119,6 +120,7 @@
       $('#meta').innerHTML = `<div class="kv"><span>Held by</span><b>${owner ? `<span class="chip" style="background:${owner.color}"></span> ${owner.name}` : 'no one'}</b></div><div class="kv"><span>Garrison</span><b>${gp.troops.toLocaleString()} troops · walls ${gp.defense} · training ${gp.training}</b></div><div class="kv"><span>Officers present</span><b>${offs.map((o) => o.name).join(', ') || '—'}</b></div><div class="kv"><span>Tier</span><b>${['', 'town', 'city', 'great city'][P.tier]}</b></div><div class="kv"><span>Elevation</span><b>${m.elev} m</b></div><div class="kv"><span>Traits</span><b>${P.traits.map((t) => TRAIT_INFO[t].label).join(', ') || '—'}</b></div><div class="kv"><span>Roads out</span><b>${m.exits.map((e) => byId[e.to].name).join(', ')}</b></div><div class="kv"><span>Rivers</span><b>${[...new Set(m.rivers.filter((r) => r.n).map((r) => r.n))].join(', ') || '—'}</b></div><div class="kv"><span>Position</span><b>${P.lat.toFixed(2)}N ${P.lon.toFixed(2)}E</b></div>`;
       $('#legend').innerHTML = `<tr><th>Terrain</th><th>Hexes</th><th>Move</th><th>Defence</th><th>Blocks sight</th><th>Charge</th></tr>` + ORDER.filter((k) => count[k]).map((k) => { const R = ruleText(k); return `<tr title="${R.note}"><td><i style="background:${TERRAIN[k].swatch}"></i>${TERRAIN[k].name}</td><td>${count[k]}</td><td>${R.move}</td><td>${R.def}</td><td>${R.los}</td><td>${R.cav}</td></tr>`; }).join('');
       renderDeployment(id);
+      if (gp.sites && gp.sites.length) $('#map').insertAdjacentHTML('beforeend', HEXVIEW.sitesSvg(gp.sites, 26, () => (owner ? owner.color : FREE)));
       document.querySelectorAll('.thumb').forEach((t) => t.classList.toggle('sel', t.dataset.id === id));
     }
     // ---- deployment preview: the garrison as it would stand, and an attacker from one of the roads ----

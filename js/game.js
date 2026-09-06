@@ -227,12 +227,75 @@ const Game = (() => {
     return ok(`${o.name} developed ${label} in ${pname(pid)}: ${before} → ${p[key]}.`);
   }
 
+  // ---------- outstations ----------
+  const sitesOf = (p) => p.sites || (p.sites = []);
+  const hasSite = (p, type) => sitesOf(p).some((x) => x.type === type && !x.damaged);
+  const siteName = (type) => (SITE_TYPES[type] || { label: type }).label;
+  // where a kind of site could stand on the city's hex map: the right ground, outside the walls, near the roads
+  function siteSpots(pid, type) {
+    const m = HEXMAPS[pid]; const T = SITE_TYPES[type]; if (!m || !T) return [];
+    const P = provData(pid); const p = prov(pid); const used = new Set(sitesOf(p).map((x) => `${x.c},${x.r}`));
+    if (T.coast && !hasTrait(p, 'coast')) return [];
+    if (T.water && !hasShipyard(p)) return [];
+    if (type === 'pasture' && !(hasTrait(p, 'horses') || P.lat >= 34.5)) return [];
+    const out = [];
+    for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) {
+      const t = m.terrain[r * m.w + c]; const i = r * m.w + c; const dist = BATTLE.hexDist(c, r, 6, 5);
+      if (!T.hexes.includes(t) || used.has(`${c},${r}`) || dist < T.near[0] || dist > T.near[1]) continue;
+      if (T.road && m.roads[i] !== '1') continue;
+      if (T.water && !BATTLE.neighbours(c, r, m.w, m.h).some(([nc, nr]) => BATTLE.navigable(m.terrain[nr * m.w + nc]))) continue;
+      const nearRoad = BATTLE.neighbours(c, r, m.w, m.h).some(([nc, nr]) => m.roads[nr * m.w + nc] === '1') || m.roads[i] === '1';
+      out.push({ c, r, score: dist + (nearRoad ? 0 : 1.5) });
+    }
+    return out.sort((a, b) => a.score - b.score);
+  }
+  function availableSites(pid) {
+    const p = prov(pid);
+    return SITE_ORDER.map((type) => { const T = SITE_TYPES[type]; const have = sitesOf(p).filter((x) => x.type === type).length; const spots = have >= T.max ? [] : siteSpots(pid, type); return { type, label: T.label, glyph: T.glyph, cost: T.cost, desc: T.desc, have, max: T.max, ok: spots.length > 0 && have < T.max, spot: spots[0] || null }; });
+  }
+  function buildSite(pid, name, type) {
+    const p = prov(pid); const e = useOfficer(name, pid); if (e) return e;
+    const a = availableSites(pid).find((x) => x.type === type);
+    if (!a || !a.ok) return fail(`No place for a ${siteName(type).toLowerCase()} at ${pname(pid)}.`);
+    if (p.gold < a.cost) return fail(`Not enough gold (need ${a.cost}).`);
+    p.gold -= a.cost; off(name).acted = true;
+    sitesOf(p).push({ type, c: a.spot.c, r: a.spot.r, damaged: false, built: S.turn });
+    return ok(`${name} raised a ${siteName(type).toLowerCase()} outside ${pname(pid)}.`, 'good');
+  }
+  function repairSite(pid, name, index) {
+    const p = prov(pid); const st = sitesOf(p)[index]; if (!st || !st.damaged) return fail('Nothing to repair there.');
+    const e = useOfficer(name, pid); if (e) return e;
+    const cost = Math.floor(SITE_TYPES[st.type].cost / 2); if (p.gold < cost) return fail(`Not enough gold (need ${cost}).`);
+    p.gold -= cost; off(name).acted = true; st.damaged = false;
+    return ok(`${name} rebuilt the ${siteName(st.type).toLowerCase()} outside ${pname(pid)}.`, 'good');
+  }
+  const siteGold = (p) => sitesOf(p).reduce((a, x) => a + (x.damaged ? 0 : (SITE_TYPES[x.type].gold || 0)), 0);
+  const siteFood = (p) => sitesOf(p).filter((x) => x.type === 'village' && !x.damaged).length * SITE_TYPES.village.food * (hasTrait(p, 'grain') ? 1.25 : 1);
+  const buildCost = (p, base, kind) => Math.floor(base * (kind === 'walls' && hasSite(p, 'mine') ? 0.8 : 1) * (hasSite(p, 'lumber') ? 0.7 : 1));
+  // a raider's loot from an outstation, and its ruin
+  function sackSiteFor(B, i, u) {
+    const p = prov(B.city); const st = sitesOf(p)[i]; if (!st) return null;
+    const home = prov(B.att.from); const T = SITE_TYPES[st.type]; const name = T.label.toLowerCase(); let text = '', food = 0;
+    st.damaged = true;
+    const loot = (gold) => { if (home && home.owner === B.attF) home.gold += gold; text = `${fmt(gold)} gold carried off`; };
+    if (st.type === 'mine') loot(400 + ri(0, 200));
+    else if (st.type === 'salt') loot(500 + ri(0, 200));
+    else if (st.type === 'market') { loot(300 + ri(0, 200)); const F = S.factions[B.attF]; if (F) F.prestige = clamp((F.prestige || 0) - 3, 0, 100); text += '; the sack is remembered against the sacker'; }
+    else if (st.type === 'docks') { loot(150 + ri(0, 100)); p.fleet = Math.max(0, (p.fleet || 0) - 30); text += ', and the boats burn'; }
+    else if (st.type === 'lumber') loot(100 + ri(0, 100));
+    else if (st.type === 'village') { food = Math.min(p.food, 2000 + ri(0, 1000)); p.food -= food; p.pop = Math.max(1000, Math.floor(p.pop * 0.98)); text = `${fmt(food)} grain taken, the people driven off`; }
+    else if (st.type === 'pasture') { if (home && home.owner === B.attF) home.training = clamp(home.training + 5, 0, 100); loot(100 + ri(0, 100)); text += ', the herds driven away'; }
+    else if (st.type === 'tower') text = 'the beacon thrown down';
+    if (p.owner === S.player || B.attF === S.player) notice(`The ${name} outside ${pname(B.city)} is sacked by ${fname(B.attF)}.`, B.attF === S.player ? 'good' : 'bad');
+    return { name, text, food };
+  }
   function fortify(pid, name) {
     const p = prov(pid); const e = useOfficer(name, pid); if (e) return e;
-    if (p.gold < COST.fortify) return fail(`Not enough gold (need ${COST.fortify}).`);
+    const cost = buildCost(p, COST.fortify, 'walls');
+    if (p.gold < cost) return fail(`Not enough gold (need ${cost}).`);
     const o = off(name);
     const gain = Math.floor(o.ldr / 4 + ri(0, 8));
-    p.gold -= COST.fortify;
+    p.gold -= cost;
     const before = p.defense;
     p.defense = clamp(p.defense + gain, 0, 999);
     o.acted = true;
@@ -264,7 +327,7 @@ const Game = (() => {
     p.gold -= Math.round(rc);
     p.pop -= Math.floor(n * 0.7);
     // green recruits dilute training (frontier riders less so)
-    p.training = Math.round((p.training * p.troops + (horses ? 45 : 30) * n) / (p.troops + n));
+    p.training = Math.round((p.training * p.troops + (horses || hasSite(p, 'pasture') ? 45 : 30) * n) / (p.troops + n));
     p.troops += n;
     o.acted = true;
     return ok(`${o.name} recruited ${fmt(n)} soldiers in ${pname(pid)}.`);
@@ -396,6 +459,7 @@ const Game = (() => {
     p.gold -= cost; o.acted = true;
     const skill = o.int / 100 + (hasSkill(o, 'stratagem') ? 0.1 : 0);
     const detected = (base) => Math.random() < base;
+    if (kind !== 'spy' && hasSite(t, 'tower') && Math.random() < 0.5) { shiftRelation(me, them, -10); return ok(`The sentries of the watchtower at ${pname(targetCity)} catch ${o.name}'s agents on the road. Relations with ${fname(them)} suffer.`, 'bad'); }
     if (kind === 'spy') {
       const hidden = hiddenItemsIn(targetCity).map((it) => it.name);
       const offs = officersIn(targetCity, them).sort((a, b) => a.loyalty - b.loyalty);
@@ -410,6 +474,7 @@ const Game = (() => {
     if (kind === 'sabotage') {
       const w = Math.floor(t.defense * (0.08 + skill * 0.08)), f = Math.floor(t.food * (0.1 + skill * 0.1));
       t.defense -= w; t.food -= f;
+      const standing = sitesOf(t).filter((x) => !x.damaged); if (standing.length && Math.random() < 0.4) { const st = pick(standing); st.damaged = true; log(`${o.name}'s men burn the ${siteName(st.type).toLowerCase()} outside ${pname(targetCity)}.`, 'strat'); }
       if (detected(0.45)) { shiftRelation(me, them, -15); return ok(`${o.name}'s men fire the granaries and undermine a wall at ${pname(targetCity)}: walls -${w}, food -${fmt(f)}. They are caught; relations with ${fname(them)} suffer.`, 'good'); }
       return ok(`${o.name}'s men fire the granaries and undermine a wall at ${pname(targetCity)}: walls -${w}, food -${fmt(f)}.`, 'good');
     }
@@ -467,11 +532,12 @@ const Game = (() => {
   function buildShips(pid, name) {
     const p = prov(pid); const e = useOfficer(name, pid); if (e) return e;
     if (!hasShipyard(p)) return fail(`${pname(pid)} has no river or sea to launch ships on.`);
-    if (p.gold < COST.ships) return fail(`Not enough gold (need ${COST.ships}).`);
+    const cost = buildCost(p, COST.ships, 'ships');
+    if (p.gold < cost) return fail(`Not enough gold (need ${cost}).`);
     if (p.fleet >= 100) return fail('The fleet is already at full strength.');
     const o = off(name);
-    const gain = Math.floor(o.ldr / 6 + o.int / 10 + ri(0, 5));
-    p.gold -= COST.ships;
+    const gain = Math.floor(o.ldr / 6 + o.int / 10 + ri(0, 5)) * (hasSite(p, 'docks') ? 2 : 1);
+    p.gold -= cost;
     const before = p.fleet;
     p.fleet = clamp(p.fleet + gain, 0, 100);
     o.acted = true;
@@ -1866,6 +1932,7 @@ const Game = (() => {
       const text = `${n} deserts ${fname(from)} for ${fname(toFid)} on the field before ${pname(B.city)}.`; if (from === S.player || toFid === S.player) notice(text, 'strat'); else log(text, 'strat');
     },
     raiseLoyalty: (n, d) => { const o = off(n); if (o) o.loyalty = clamp(o.loyalty + d, 0, 100); },
+    sackSite: (i, u) => sackSiteFor(B, i, u), siteName,
     gold: (side) => { const p = prov(side === 'A' && B.att ? B.att.from : B.city); return p ? p.gold : 0; },
     spendGold: (side, n) => { const p = prov(side === 'A' && B.att ? B.att.from : B.city); if (!p || p.gold < n) return false; p.gold -= n; return true; },
     cityFood: (d) => { const p = prov(B.city); if (d >= 0) { p.food += d; return true; } if (p.food + d < 0) { p.food = 0; return false; } p.food += d; return true; },
@@ -1883,7 +1950,7 @@ const Game = (() => {
     const mods = battleModifiers(fromId, toId);
     const B = BATTLE.create({ city: toId, attF, defF, fromCity: fromId, troops, food: Math.floor(troops * 0.1), officers: officerNames, training: a.training, walls: b.defense, exit,
       cityTroops: b.troops, cityOfficers: defOfficers, cityTraining: b.training, control: { A: attF === S.player ? 'player' : 'ai', D: defF === S.player ? 'player' : 'ai' }, ctx: battleCtx({ city: toId }), record: !!(S.observer && S.options && S.options.watchBattles),
-      fleet: mods.frozen ? 0 : (a.fleet || 0), cityFleet: mods.frozen ? 0 : (b.fleet || 0) });
+      fleet: mods.frozen ? 0 : (a.fleet || 0), cityFleet: mods.frozen ? 0 : (b.fleet || 0), sites: sitesOf(b) });
     B.tactics = tactics || {}; B.startD = b.troops; B.att.officers = [...officerNames]; B.def.officers = [...defOfficers]; B.phase = 'idle';
     S.battles[toId] = B;
     if (attF !== S.player) aiCallReinforcements(B, 'A');
@@ -2024,6 +2091,7 @@ const Game = (() => {
     if (B.endPending) return battleEndDay(city);
     return ok(accept ? 'The champions ride out.' : 'The challenge is declined.');
   }
+  function battleSack(city, unitId) { const B = battleFor(city); if (!B || B.phase !== 'player') return fail('Begin the day first.'); const u = B.units.find((x) => x.id === unitId); if (!u || u.side !== playerSideOf(B)) return fail('Not your unit.'); return BATTLE.sack(B, u, battleCtx(B)) ? ok('The place burns.') : fail('Nothing to sack here.'); }
   function battleSubornTargets(city) { const B = battleFor(city); if (!B) return []; const ps = playerSideOf(B); return ps ? BATTLE.subornTargets(B, ps, battleCtx(B)) : []; }
   function battleGold(city) { const B = battleFor(city); if (!B) return 0; const ps = playerSideOf(B); return ps ? battleCtx(B).gold(ps) : 0; }
   function battleSuborn(city, unitId, name, gold) {
@@ -2145,9 +2213,9 @@ const Game = (() => {
       const govMult = gov ? 1 + (gov.pol / 1000) * (hasSkill(gov, 'admin') ? 2 : 1) : 1;
       const income = Math.floor((p.comm * 1.2 + p.pop / 5000) * (hasTrait(p, 'salt') ? 1.2 : 1) * (S.factions[p.owner].hasEmperor ? 1.1 : 1) * govMult * tradeMult * orderMult * incomeMult(p.owner));
       p.tradeLinks = links; p.hostileBorder = hostileBorder;
-      p.gold += income;
+      p.gold += income + siteGold(p);
       p.gold = Math.max(0, p.gold - Math.floor(p.troops * GOLD_UPKEEP));
-      p.food += Math.floor((p.agri * FOOD_PER_AGRI + (harvest ? p.agri * HARVEST_MULT : 0)) * (hasTrait(p, 'grain') ? 1.25 : 1));
+      p.food += Math.floor((p.agri * FOOD_PER_AGRI + (harvest ? p.agri * HARVEST_MULT : 0)) * (hasTrait(p, 'grain') ? 1.25 : 1)) + Math.floor(siteFood(p));
       const upkeep = Math.floor(p.troops * FOOD_UPKEEP * (isWinter() ? 1.1 : 1));
       p.food -= upkeep;
       if (p.food < 0) {
@@ -2160,7 +2228,7 @@ const Game = (() => {
       const popCap = popCapOf(p);
       const atPeace = !S.adj[p.id].some((n) => prov(n).owner && prov(n).owner !== p.owner && canAttack(p.owner, prov(n).owner));
       const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.45 ? Math.floor(popCap * 0.0006) : 0;   // refugees return to orderly, half-empty land
-      p.pop += Math.floor(p.pop * 0.004 * (isSpring() ? 1.5 : 1) * (atPeace ? 1.25 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
+      p.pop += Math.floor(p.pop * 0.004 * (isSpring() ? 1.5 : 1) * (atPeace ? 1.25 : 1) * (1 + 0.1 * sitesOf(p).filter((x) => x.type === 'village' && !x.damaged).length) * Math.max(0, 1 - p.pop / popCap)) + settlers;
       // order: a garrison and a governor keep the peace; neglect breeds revolt
       const garrisoned = p.troops >= p.pop / 60 || officersIn(p.id, p.owner).length > 0;
       const realm = factionProvinces(p.owner).length;
@@ -2657,6 +2725,8 @@ const Game = (() => {
         else if (p.gold >= COST.fortify && front && p.defense < (phase !== 'rising' ? 700 : passCity ? 600 : builder ? 550 : 450)) fortify(p.id, o.name);
         else if (p.gold >= COST.develop && p.comm < (builder ? 900 : 750)) develop(p.id, o.name, 'comm');
         else if (p.gold >= COST.develop && p.agri < 999 && (p.troops > p.agri * 40 || builder)) develop(p.id, o.name, 'agri');
+        else if (p.gold >= 900 && sitesOf(p).some((x) => x.damaged)) repairSite(p.id, o.name, sitesOf(p).findIndex((x) => x.damaged));
+        else if (p.gold >= (front ? 2500 : 1500) && availableSites(p.id).some((x) => x.ok && x.cost <= p.gold - 600)) buildSite(p.id, o.name, availableSites(p.id).find((x) => x.ok && x.cost <= p.gold - 600).type);
         else if (rich && p.gold >= COST.fortify && p.defense < 700) fortify(p.id, o.name);
         else if (rich && hasShipyard(p) && p.fleet < 90 && p.gold >= COST.ships) buildShips(p.id, o.name);
         else if (p.training < 85) train(p.id, o.name);
@@ -2687,7 +2757,7 @@ const Game = (() => {
     S.arrived = S.arrived || {}; S.history = S.history || []; S.stats = S.stats || { battles: 0, captures: 0, deaths: 0 };
     snapshotMonth();
     S.eventsFired = S.eventsFired || {}; S.objectivesDone = S.objectivesDone || {}; S.pendingDecisions = S.pendingDecisions || []; S.battles = S.battles || {};
-    for (const p of Object.values(S.provinces)) { const d = provData(p.id); p.traits = d.traits || []; if (p.fleet == null) p.fleet = 0; if (p.order == null) p.order = p.owner ? 70 : 45; if (!p.posture) p.posture = 'hold'; }
+    for (const p of Object.values(S.provinces)) { const d = provData(p.id); p.traits = d.traits || []; if (p.fleet == null) p.fleet = 0; if (p.order == null) p.order = p.owner ? 70 : 45; if (!p.posture) p.posture = 'hold'; if (!p.sites) p.sites = []; }
     for (const o of allOfficers()) { if (!o.skills) o.skills = OFFICER_SKILLS[o.name] || []; if (o.rank == null) o.rank = 0; }
     for (const f of Object.values(S.factions)) if (f.title == null) f.title = 0;
     if (S.pendingTitle === undefined) S.pendingTitle = null; if (!S.options.difficulty) S.options.difficulty = 'normal';
@@ -2707,7 +2777,7 @@ const Game = (() => {
     decide, objectiveStatus, destinyTargets,
     itemsOf, hiddenItemsIn, itemData, bestow, ITEMS, governorOf, leaderHouse, houseItems, giftItem, itemValue,
     SCENARIOS, undoMonth, canUndo, slotInfo, BIOS, CITY_NOTES, detectPhase,
-    pacify, resettle, setPosture, battleFor, playerBattles, playerSideOf, battleRequests, battleMessengers, reinforceBattle, battleBeginDay, battleEndDay, battleAutoMonth, battleMove, battleAttack, battleRam, battleWithdraw, tacticalOn, battleAnswerChallenge, battleSuborn, battleSubornTargets, battleGold, favorsOwed, declineAid, ransomPrice, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
+    pacify, resettle, setPosture, battleFor, playerBattles, playerSideOf, battleRequests, battleMessengers, reinforceBattle, battleBeginDay, battleEndDay, battleAutoMonth, battleMove, battleAttack, battleRam, battleWithdraw, tacticalOn, battleAnswerChallenge, battleSuborn, battleSubornTargets, battleGold, favorsOwed, declineAid, ransomPrice, availableSites, buildSite, repairSite, battleSack, siteName, buildCost, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
     hostSeat, exileServe, exilePetition, petitionChance, exileRecruit, exileRaise, exileFight, exileSeekPatron, exileTargets, exileSeize,
     getOption: (k) => !!(S && S.options && S.options[k]),
     setOption: (k, v) => { if (S) { S.options = S.options || {}; S.options[k] = !!v; log(`${k === 'historicalDeaths' ? 'Scripted historical deaths' : k} ${v ? 'enabled' : 'disabled'}.`, 'sys'); } },

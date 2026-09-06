@@ -551,6 +551,11 @@ const UI = (() => {
       html += `<div class="sec">Battle</div><div class="kv"><span>Besieged by</span><b>${esc(Game.fname(B.attF))}</b></div><div class="kv"><span>Day</span><b>${B.day} (day ${B.dayInMonth} of this month)</b></div><div class="kv"><span>In the field</span><b>${fmt(BATTLE.sideTroops(B, 'A'))} attackers · ${fmt(BATTLE.sideTroops(B, 'D'))} defenders</b></div>
         <div class="cmds">${ps ? `<button class="wide btn-gold" data-cmd="openBattle">⚔ ${B.dayInMonth < 30 ? 'Fight the battle' : 'View the battle'}</button>` : `<button class="wide" data-cmd="openBattle">Watch the siege</button>`}</div>`;
     }
+    const sites = p.sites || [];
+    if (sites.length || (p.owner === S.player && !S.observer)) {
+      html += `<div class="sec">Outstations</div><div class="sites-list">${sites.map((st, i) => { const T = SITE_TYPES[st.type]; return `<div class="kv" title="${esc(T.desc)}"><span><span class="glyph">${T.glyph}</span>${esc(T.label)}${st.damaged ? ' <small style="color:#e29a8f">(ruined)</small>' : ''}</span><b>${st.damaged && p.owner === S.player && !S.observer ? `<button class="btn-sm" data-cmd="repair" data-i="${i}" ${!idleHere.length ? 'disabled' : ''}>Repair (${Math.floor(T.cost / 2)}g)</button>` : `<small class="hint">${st.type === 'village' ? '+food' : T.gold ? `+${T.gold}g` : 'built'}</small>`}</b></div>`; }).join('') || '<div class="hint">None yet. Outstations stand on the city\u2019s battle map and can be sacked in a siege.</div>'}</div>`;
+      if (p.owner === S.player && !S.observer) html += `<div class="cmds"><button class="wide" data-cmd="site" ${!idleHere.length ? 'disabled' : ''} title="Raise a mine, villages, pasture, lumber camp, docks, salt pans, a watchtower or a market outside the walls">⚒ Build an outstation</button></div>`;
+    }
     if (nearBattle.length) html += `<div class="sec">Battles nearby</div><div class="cmds">${nearBattle.map((x) => `<button data-cmd="reinforce" data-target="${x.city}" ${!idleHere.length ? 'disabled' : ''}>Send help to ${esc(Game.pname(x.city))}</button>`).join('')}</div>`;
 
     const offs = p.owner ? Game.officersIn(selected, p.owner) : [];
@@ -830,6 +835,8 @@ const UI = (() => {
       case 'transfer': return transferDialog(pid);
       case 'attack': return attackDialog(pid, null);
       case 'openBattle': return openBattle(pid);
+      case 'site': return siteDialog(pid);
+      case 'repair': return chooseOfficer('Rebuild the outstation', 'An officer oversees the rebuilding; it costs half the price of the building.', Game.idleOfficers(pid), () => '', (n) => result(Game.repairSite(pid, n, +data.i)));
       case 'reinforce': return reinforceDialog(pid, data.target);
       case 'attackFrom': return attackDialog(data.from, pid);
     }
@@ -1260,10 +1267,10 @@ const UI = (() => {
   function initBattleScreen() {
     $('#bt-close').addEventListener('click', closeBattle);
     $('#bt-help').addEventListener('click', () => openModal(`<h3>Fighting a battle</h3>
-      <p class="hint">Each turn is a day. Click one of your units, then a green hex to march there (three movement points a day; hills, forest and streams cost two, marsh three, roads one), a red enemy to attack it, or a gold gate to set the ram against it. A barred gate falls after three days of ramming, or when its defenders break. Units on walls, gates and hills loose arrows two hexes away without reply. Casualties depend on strength, commanders, training, morale and the ground; a unit breaks when its morale or numbers fail, and its officers may be captured.</p>
+      <p class="hint">Each turn is a day. Click one of your units, then a green hex to march there (three movement points a day; hills, forest and streams cost two, marsh three, roads one), a red enemy to attack it, or a gold gate to set the ram against it. A barred gate falls after two to five rams depending on the city's walls (a lumber camp in the attacker's hands saves one), or when its defenders break; high walls also shelter their defenders better, make their arrows deadlier and gates harder to storm. Units on walls, gates and hills loose arrows two hexes away without reply. Casualties depend on strength, commanders, training, morale and the ground; a unit breaks when its morale or numbers fail, and its officers may be captured.</p>
       <p class="hint">The attacker moves first each day. Both armies eat: the besiegers from the grain they brought, the garrison from the city. Messengers can be sent once for help; your own neighbouring cities and allies may march, arriving in one to ten days for the attacker and fifteen to twenty for the defender. If the month ends undecided the siege continues next month, and more men and grain can be sent from neighbouring cities in the normal turn. Taking the city's heart, or breaking every defender, wins it; the attacker may withdraw at any time.</p>
       <p class="hint"><b>Champions.</b> When a unit with officers attacks a unit with officers, its best fighter may first call the enemy's out to single combat; the AI does the same to you, and either side may decline at a small cost in morale. The loser's men lose heart, and the loser is wounded for the rest of the battle, or taken, or slain. <b>Letters.</b> Your cleverest officer on the field may write to a wavering enemy officer (loyalty under 70, not a ruler or sworn brother): gold sweetens it, a losing fight and low morale help, and a commander who turns brings his whole unit over. Officers of a broken unit mostly escape; some are captured and a few fall.</p>
-      <p class="hint"><b>Ships.</b> A city with a fleet puts men aboard: most of an army that comes by a river or sea road, a third of one that comes by land, and a quarter of a garrison whose walls stand by the water. Ships move one point per hex on sea, lake and river, loose arrows two hexes away, are hard to attack from the bank, fight with their fleet's skill, and may land on a free shore hex outside the walls, which ends their day and makes them foot soldiers.</p>
+      <p class="hint"><b>Outstations.</b> Mines, villages, pastures, lumber camps, docks, salt pans, watchtowers and markets stand on the map outside the walls. The unit standing on one at day's end holds it: a lumber camp lets attackers break gates in two rams, a watchtower is a strong point, a pasture makes the holder's charges harder, docks let ships land for a step. An attacker standing on one may sack it for loot, ruining it until its lord rebuilds it. <b>Ships.</b> A city with a fleet puts men aboard: most of an army that comes by a river or sea road, a third of one that comes by land, and a quarter of a garrison whose walls stand by the water. Ships move one point per hex on sea, lake and river, loose arrows two hexes away, are hard to attack from the bank, fight with their fleet's skill, and may land on a free shore hex outside the walls, which ends their day and makes them foot soldiers.</p>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal }));
     $('#bt-map').addEventListener('click', (e) => {
       if (BT.replay) return;
@@ -1297,6 +1304,7 @@ const UI = (() => {
       const B = Game.battleFor(BT.city); if (!B) { closeBattle(); return; }
       if (act === 'end') { const r = Game.battleEndDay(BT.city); afterBattleAction(r.msg !== 'challenge'); }
       else if (act === 'suborn') subornDialog();
+      else if (act === 'sack') { const r = Game.battleSack(BT.city, BT.sel); if (!r.ok) toast(r.msg); afterBattleAction(); }
       else if (act === 'auto') { Game.battleEndDay(BT.city, true); afterBattleAction(true); }
       else if (act === 'month') { Game.battleAutoMonth(BT.city); afterBattleAction(true); }
       else if (act === 'msg') messengerDialog(BT.city, renderBattle);
@@ -1339,14 +1347,14 @@ const UI = (() => {
     // broken gates
     for (const [k, hits] of Object.entries(B.gates)) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
     const units = B.units.map((u) => ({ ...u, color: unitColor(u.fid) }));
-    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + extra + HEXVIEW.unitsSvg(units, BT_S, BT.sel);
-    $('#bt-title').textContent = `The siege of ${Game.pname(B.city)}`;
+    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + HEXVIEW.sitesSvg(B.sites, BT_S, (st) => unitColor(st.holder === 'A' ? B.attF : B.defF)) + extra + HEXVIEW.unitsSvg(units, BT_S, BT.sel);
+    $('#bt-title').textContent = `The siege of ${Game.pname(B.city)}`; $('#bt-title').title = `Walls ${B.walls || 0}: a gate falls after ${BATTLE.gateHits(B)} rams`;
     $('#bt-day').textContent = `Day ${B.day}${B.dayInMonth ? ` · day ${B.dayInMonth} of the month` : ''}${B.over ? ' · decided' : B.phase === 'player' ? ' · your orders' : ''}`;
     const eatA = Math.ceil(BATTLE.sideTroops(B, 'A') * BATTLE.FOOD_PER_MAN_DAY);
-    $('#bt-food').textContent = `Besiegers' grain ${fmt(Math.floor(B.att.food))} (${eatA ? Math.floor(B.att.food / eatA) : '∞'} days) · city granary ${fmt(S.provinces[B.city].food)}`;
+    $('#bt-food').textContent = `Walls ${B.walls || 0} (gates fall after ${BATTLE.gateHits(B)} rams) · besiegers' grain ${fmt(Math.floor(B.att.food))} (${eatA ? Math.floor(B.att.food / eatA) : '∞'} days) · city granary ${fmt(S.provinces[B.city].food)}`;
     const sideRow = (side, name) => { const us = BATTLE.sideUnits(B, side); const arriving = B.arrivals.filter((a) => a.side === side && !a.done); return `<div class="side"><span><span class="chip" style="background:${unitColor(side === 'A' ? B.attF : B.defF)}"></span> ${esc(name)}${ps === side ? ' (you)' : ''}</span><b>${us.length} units · ${fmt(BATTLE.sideTroops(B, side))}${arriving.length ? ` · +${fmt(arriving.reduce((a, x) => a + x.troops, 0))} coming (day ${Math.min(...arriving.map((x) => x.day))})` : ''}</b></div>`; };
     $('#bt-sides').innerHTML = sideRow('A', Game.fname(B.attF)) + sideRow('D', B.defF ? Game.fname(B.defF) : 'the town militia');
-    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? sel.officers.map((n) => esc(n) + (B.wounded && B.wounded[n] ? ' <small class="hint">(wounded)</small>' : '')).join(', ') : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men${sel.naval ? ` aboard ship (fleet ${sel.fleet || 0})` : ''} · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.${sel.naval ? ' Ships sail one hex a point on sea, lake and river, shoot two hexes, and may land on a free shore hex, which ends their day.' : ''}` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
+    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? sel.officers.map((n) => esc(n) + (B.wounded && B.wounded[n] ? ' <small class="hint">(wounded)</small>' : '')).join(', ') : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men${sel.naval ? ` aboard ship (fleet ${sel.fleet || 0})` : ''} · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.${sel.naval ? ' Ships sail one hex a point on sea, lake and river, shoot two hexes, and may land on a free shore hex, which ends their day.' : ''}${(() => { const st = BATTLE.siteAt(B, sel.c, sel.r); return st ? ` Standing on the ${SITE_TYPES[st.type].label.toLowerCase()}${st.damaged ? ' (ruined)' : ''}, held by ${st.holder === 'A' ? Game.fname(B.attF) : B.defF ? Game.fname(B.defF) : 'the town'}.` : ''; })()}` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
     else $('#bt-unit').innerHTML = `<div class="hint">${ps ? (B.phase === 'player' ? 'Click one of your units to give it orders.' : 'The day is done; end it to continue.') : 'You are watching this siege.'}</div>`;
     const canAct = ps && !B.over && B.dayInMonth < 30;
     $('#bt-actions').innerHTML = ps ? `
@@ -1355,6 +1363,7 @@ const UI = (() => {
       <button data-act="month" ${canAct ? '' : 'disabled'} title="Your generals fight the rest of the month">Auto to month's end</button>
       <button data-act="msg" ${!B.over && !B[ps === 'A' ? 'att' : 'def'].asked ? '' : 'disabled'} title="Ask neighbouring cities and allies for help">✉ Messengers</button>
       <button data-act="suborn" ${canAct && B.phase === 'player' ? '' : 'disabled'} title="Letters and gold to a wavering enemy officer">✉ Suborn</button>
+      ${sel && BATTLE.sackable(B, sel) && sel.side === ps ? `<button class="wide btn-red" data-act="sack" title="Put the outstation under this unit to the torch: loot for the army, ruin for the city">🔥 Sack the ${esc(SITE_TYPES[BATTLE.siteAt(B, sel.c, sel.r).type].label.toLowerCase())}</button>` : ''}
       <button class="btn-red" data-act="withdraw" ${B.over ? 'disabled' : ''}>Withdraw</button>${B.dayInMonth >= 30 && !B.over ? '<div class="hint wide" style="grid-column:span 2">The month\\u2019s thirty days are fought. End the month on the map; the siege continues next month.</div>' : ''}` : `<div class="hint" style="grid-column:span 2">An AI siege in progress; it is fought out when the month ends.</div>`;
     if (B.pendingChallenge && ps && !BT.asking) {
       const cu = B.units.find((x) => x.id === B.pendingChallenge.u), cv = B.units.find((x) => x.id === B.pendingChallenge.v);
@@ -1368,6 +1377,16 @@ const UI = (() => {
     }
     const byDay = {}; for (const l of B.log.slice(-160)) (byDay[l.day] = byDay[l.day] || []).push(l);
     $('#bt-log').innerHTML = Object.keys(byDay).sort((a, b) => b - a).map((d) => `<div class="day-head">Day ${d}</div>` + byDay[d].map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('')).join('');
+  }
+  // raise an outstation: the kinds the ground allows, with cost and effect
+  function siteDialog(pid) {
+    const av = Game.availableSites(pid); const idle = Game.idleOfficers(pid); const p = Game.prov(pid);
+    openModal(`<h3>Outstations of ${esc(Game.pname(pid))}</h3><p class="hint">Buildings raised outside the walls on the city's battle map. They pay every month, and an enemy at the gates may seize or sack them. ${fmt(p.gold)} gold in the treasury.</p>
+      <div class="sites-list">${av.map((a) => `<div class="kv"><span><span class="glyph">${a.glyph}</span>${esc(a.label)}${a.max > 1 ? ` (${a.have}/${a.max})` : ''}<br><small class="hint">${esc(a.desc)}</small></span><b>${a.ok ? `<button class="btn-sm ${p.gold >= a.cost ? 'btn-gold' : ''}" data-act="build" data-type="${a.type}" ${p.gold >= a.cost && idle.length ? '' : 'disabled'}>${a.cost}g</button>` : `<small class="hint">${a.have >= a.max ? 'built' : 'no ground for it'}</small>`}</b></div>`).join('')}</div>
+      <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, {
+      close: closeModal,
+      build: (el) => { const type = el.dataset.type; closeModal(); chooseOfficer(`Build a ${SITE_TYPES[type].label.toLowerCase()}`, `${esc(SITE_TYPES[type].desc)} Costs ${SITE_TYPES[type].cost} gold; the officer oversees the work.`, idle, () => '', (n) => result(Game.buildSite(pid, n, type))); },
+    }, true);
   }
   // letters across the lines: turn a wavering enemy officer, with gold to sweeten it
   function subornDialog() {

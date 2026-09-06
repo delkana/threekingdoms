@@ -487,6 +487,10 @@ kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); 
 .unit-token.naval .unit { stroke: #cfe6f0; stroke-dasharray: 3 2; }
 .unit-n { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .unit-o { font-family: var(--serif); fill: rgba(255,255,255,0.9); text-shadow: 0 1px 2px #000; pointer-events: none; }
+.site-ring { fill: rgba(0,0,0,0.35); stroke-width: 2; }
+.site-glyph { fill: #f0e6d0; font-family: var(--serif); pointer-events: none; text-shadow: 0 1px 2px #000; }
+.site.ruined .site-ring { stroke-dasharray: 3 2; opacity: 0.7; } .site.ruined .site-glyph { opacity: 0.45; } .site-x { stroke: #e29a8f; stroke-width: 2; }
+.sites-list .kv { align-items: center; } .sites-list .glyph { font-size: 16px; margin-right: 6px; }
 .hl { cursor: pointer; stroke-width: 1.4; }
 .hl.move { fill: rgba(120, 200, 120, 0.28); stroke: rgba(150, 240, 150, 0.7); }
 .hl.attack { fill: rgba(230, 80, 60, 0.30); stroke: rgba(255, 120, 100, 0.85); }

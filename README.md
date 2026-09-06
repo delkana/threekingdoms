@@ -680,6 +680,34 @@ the gates first, then the walls, then the city; attackers form up at the exit
 of the road they arrive by, at least three hexes from the walls. The panel lets
 you pick which neighbour attacks and shows both armies as they would stand.
 
+## Outstations
+
+Beyond the walls of every city lie its outstations: buildings raised on the
+city's hex battle map with **Build an outstation** in the city panel, each
+allowed only where the ground suits it (the builder finds the nearest fitting
+hex, close to a road). They pay every month, they change how the city fights,
+and an enemy at the gates can seize or sack them.
+
+| Site | Ground | Every month | In a siege |
+|---|---|---|---|
+| Mine (800) | a mountain hex | +120 gold; walls cost a fifth less | loot |
+| Village (400, up to three) | farmland | +600 food (+25% in a granary province); people grow faster | grain for the besiegers, people driven off |
+| Horse pasture (600) | open plain, in horse country or the north | recruits arrive better trained | the holder's men charge harder on open ground; sacked, the herds go to the raider's home |
+| Lumber camp (400) | forest | walls and ships cost three tenths less | an attacker who holds it breaks gates in two rams instead of three |
+| Docks (600) | shore of river or sea, in a port | +80 gold; shipwrights work twice as fast | the holder's ships land here for a single point; sacked, the boats burn (fleet −30) |
+| Salt pans (700) | coast | +200 gold | rich loot |
+| Watchtower (500) | a hill within three hexes | spies and saboteurs caught half the time | a strong point (+25% defence); taking it heartens the takers |
+| Market town (500) | a road hex by the gate | +100 gold | loot, and the sacker loses prestige |
+
+The unit standing on an outstation at the day's end holds it. An attacking unit
+standing on one may **sack** it, spending its action: gold goes home with the
+army, grain to the baggage train, and the place lies in ruins until its lord
+rebuilds it for half the price. Saboteurs burn outstations too. The AI raises
+them when it is rich, rebuilds ruins, walks idle besiegers to unheld ones, and
+sacks when its siege is going badly or has dragged on. Intact outstations pass
+with the city when it falls. The battle-maps viewer shows a saved game's
+outstations on each map.
+
 ## Tactical battles
 
 With **Tactical battles on the hex maps** switched on (the ≡ menu; it is on by
@@ -697,9 +725,13 @@ three); it may fight once, either against a neighbour or, from walls, gates,
 hills or ships, with arrows two hexes away and no reply. Casualties follow
 strength (men, the best WAR and LDR among the unit's officers, training, morale)
 against the defender's strength and ground; a unit that loses far more than it
-inflicts loses morale, and it breaks when its morale or numbers fail. A barred
-gate must be rammed three times, or its defenders broken, before attackers can
-pass the walls; the city falls when attackers hold its heart with no defenders
+inflicts loses morale, and it breaks when its morale or numbers fail. The city's
+walls score matters on the field: a barred gate must be rammed two to five times
+(two behind walls under 150, five behind walls of 750 and more; a lumber camp in
+the attacker's hands saves one), or its defenders broken, before attackers can
+pass; defenders on the walls get up to +50% shelter, their arrows strike harder
+from high walls, and storming a held gate is harder behind them. A besieged
+lord raises his walls with Fortify as usual; the city falls when attackers hold its heart with no defenders
 left inside the walls (or the garrison reduced to less than a third of the
 besiegers), or when every defender is gone. Attackers move first each day.
 

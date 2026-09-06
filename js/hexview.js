@@ -148,7 +148,17 @@ const HEXVIEW = (() => {
     }
     return g + '</g>';
   }
+  // outstations: a ring in the holder's colour and the site's glyph; ruined ones are greyed and crossed
+  function sitesSvg(sites, s, colorOf) {
+    let g = '<g class="sites">';
+    for (const st of sites || []) {
+      const [cx, cy] = centre(st.c, st.r, s); const T = (typeof SITE_TYPES !== 'undefined' && SITE_TYPES[st.type]) || { glyph: '?', label: st.type };
+      const col = colorOf ? colorOf(st) : '#d9c08a';
+      g += `<g class="site${st.damaged ? ' ruined' : ''}" data-site="${st.i != null ? st.i : ''}"><circle class="site-ring" cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(s * 0.62)}" style="stroke:${col}"/><text class="site-glyph" x="${f1(cx)}" y="${f1(cy + s * 0.28)}" text-anchor="middle" style="font-size:${f1(s * 0.8)}px">${T.glyph}</text>${st.damaged ? `<line class="site-x" x1="${f1(cx - s * 0.5)}" y1="${f1(cy - s * 0.5)}" x2="${f1(cx + s * 0.5)}" y2="${f1(cy + s * 0.5)}"/>` : ''}<title>${T.label}${st.damaged ? ' (ruined)' : ''}</title></g>`;
+    }
+    return g + '</g>';
+  }
   // highlight hexes (reachable moves, attack targets, gates to ram)
   function highlightSvg(cells, s, cls) { return cells.map(([c, r]) => { const [cx, cy] = centre(c, r, s); return `<polygon class="hl ${cls}" points="${hexPts(cx, cy, s)}" data-c="${c}" data-r="${r}"/>`; }).join(''); }
-  return { TERRAIN, render, centre, hexPts, unitsSvg, highlightSvg, byId };
+  return { TERRAIN, render, centre, hexPts, unitsSvg, highlightSvg, sitesSvg, byId };
 })();

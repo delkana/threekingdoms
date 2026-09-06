@@ -608,6 +608,20 @@ const SURNAMES = ['Wang', 'Li', 'Zhang', 'Liu', 'Chen', 'Yang', 'Zhao', 'Huang',
 const GIVEN = ['Ping', 'Yi', 'Jun', 'Xian', 'Zhen', 'Kang', 'Feng', 'Yuan', 'Tai', 'Hong', 'Ji', 'Xin', 'Lie', 'Dan', 'Bao', 'Shao', 'Da', 'Zhi', 'Huan', 'Yong', 'Zhong', 'Hui', 'Meng', 'Xu', 'Fu', 'Sheng', 'Cheng', 'Rui', 'Heng', 'Wen', 'Bin', 'Ning', 'Qian', 'Jing', 'Shun', 'De', 'Zong', 'Gui', 'Long', 'Hu', 'Biao', 'Yao', 'Xun', 'Ang', 'Zhao', 'Ru', 'Mao', 'Chong', 'Dun', 'Shuang', 'Tong', 'Xiang', 'Zan', 'Fang', 'Gan', 'Qing', 'Wei', 'Liang', 'Ce', 'Quan', 'Ba', 'Jin', 'Kai', 'Yan', 'Yu', 'Xiu', 'Tan', 'Shang', 'Pi', 'Zhang', 'Ren', 'Yin', 'Lu', 'Xi', 'Bi'];
 
 // Officer skills. Unlisted officers have none; generated talents may gain one.
+// Outstations: buildings raised outside a city's walls on its hex battle map, unlocked by the ground there.
+// hexes: terrain codes the site may stand on; near: hex distance from the city centre allowed; max: how many of the kind.
+const SITE_TYPES = {
+  mine:    { label: 'Mine',          glyph: '⛏', cost: 800, hexes: 'm',    near: [2, 6], max: 1, gold: 120, desc: 'Copper and iron from the hills: +120 gold a month, and the walls cost a fifth less to raise. Sacked for gold.' },
+  village: { label: 'Village',       glyph: '⌂', cost: 400, hexes: 'a',    near: [2, 6], max: 3, food: 600, desc: 'A farming hamlet: +600 food a month (a quarter more in a granary province) and faster growth of the people. Sacked for grain, and the people suffer.' },
+  pasture: { label: 'Horse pasture', glyph: '♞', cost: 600, hexes: 'p',    near: [2, 4], max: 1, desc: 'Studs and grazing: recruits arrive better trained, and in battle the holder\'s men charge harder on open ground. Sacked for horses, which go to the raider\'s home.' },
+  lumber:  { label: 'Lumber camp',   glyph: '♣', cost: 400, hexes: 'f',    near: [2, 6], max: 1, desc: 'Timber: walls and ships cost three tenths less. In battle an attacker who holds it builds engines, and gates fall in two rams instead of three.' },
+  docks:   { label: 'Docks',         glyph: '⚓', cost: 600, hexes: 'pafh', near: [2, 5], max: 1, gold: 80, water: true, desc: 'Wharves on the water: +80 gold a month and shipwrights work twice as fast. In battle the holder\'s ships land here without losing the day. Sacked: boats burn and the fleet suffers.' },
+  salt:    { label: 'Salt pans',     glyph: '✶', cost: 700, hexes: 'pa',   near: [2, 6], max: 1, gold: 200, coast: true, desc: 'Salt from the sea: +200 gold a month, on top of the province\'s trade. A rich prize for a raider.' },
+  tower:   { label: 'Watchtower',    glyph: '♜', cost: 500, hexes: 'h',    near: [2, 3], max: 1, desc: 'A beacon fort on a hill by the walls: spies and saboteurs are caught half the time. In battle it is a strong point (+25% defence) that gives its holder a place to shoot from and heartens him.' },
+  market:  { label: 'Market town',   glyph: '⚖', cost: 500, hexes: 'pa',   near: [2, 3], max: 1, gold: 100, road: true, desc: 'A market on the road outside the gate: +100 gold a month. Sacked for gold, to the shame of the sacker.' },
+};
+const SITE_ORDER = ['mine', 'docks', 'village', 'salt', 'market', 'pasture', 'lumber', 'tower'];
+
 const SKILL_INFO = {
   cavalry:   { label: 'Cavalry',   desc: 'Leads horsemen: +8% attack, +15% from horse country or over frozen rivers.' },
   naval:     { label: 'Naval',     desc: 'Master of ships: river and sea crossings cost half the losses and fight better.' },

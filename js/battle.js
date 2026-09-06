@@ -119,8 +119,13 @@ const BATTLE = (() => {
   function terrainAt(B, c, r) { const m = HEXMAPS[B.city]; return c >= 0 && c < m.w && r >= 0 && r < m.h ? m.terrain[r * m.w + c] : null; }
   const roadAt = (B, c, r) => { const m = HEXMAPS[B.city]; return HEXMAPS[B.city].roads[r * m.w + c] === '1'; };
   const unitAt = (B, c, r) => B.units.find((u) => u.c === c && u.r === r);
-  const gateOpen = (B, c, r) => (B.gates[key(c, r)] || 0) >= GATE_HITS;
-  const anyGateOpen = (B) => Object.values(B.gates).some((h) => h >= GATE_HITS);
+  // outstations on the field: the unit standing on one at day's end holds it; a lumber camp in the attacker's hands means engines
+  const siteAt = (B, c, r) => (B.sites || []).find((x) => x.c === c && x.r === r) || null;
+  const holds = (B, side, type) => (B.sites || []).some((x) => x.type === type && x.holder === side && !x.damaged);
+  // the city's walls score (0-999) sets how many rams a gate takes: about two behind low walls, five behind the highest; engines from a lumber camp save one
+  const gateHits = (B) => Math.max(2, Math.round(1.5 + (B.walls || 0) / 250) - (holds(B, 'A', 'lumber') ? 1 : 0));
+  const gateOpen = (B, c, r) => (B.gates[key(c, r)] || 0) >= gateHits(B);
+  const anyGateOpen = (B) => Object.values(B.gates).some((h) => h >= gateHits(B));
   const insideWalls = (t) => 'CWG'.includes(t);
 
   // movement cost to enter a hex for a unit of `side`; null = cannot
@@ -131,6 +136,7 @@ const BATTLE = (() => {
     if (u.naval) {   // ships: one point per water hex; a landing on a free shore hex outside the walls ends the day's movement
       if (navigable(t)) return 1;
       if (insideWalls(t) || !standable(t, road)) return null;
+      const dk = siteAt(B, c, r); if (dk && dk.type === 'docks' && !dk.damaged && dk.holder === u.side) return 1;   // wharves: a landing that costs no more than a step
       return u.mp;   // the whole remaining movement, so a landing is always the last step
     }
     if (navigable(t) && !road) return u.mp === MP_PER_DAY ? MP_PER_DAY : null;   // fording or swimming takes the whole day
@@ -167,7 +173,8 @@ const BATTLE = (() => {
   function defenceBonus(B, u) {
     const t = terrainAt(B, u.c, u.r); let b = u.naval ? 0.15 : TERRAIN[t].def;   // water's -0.50 applies to men in it, never to ships
     if (t === 'G' && gateOpen(B, u.c, u.r)) b = 0;   // a broken gate shelters no one
-    if (u.side === 'D' && 'WG'.includes(t)) b += Math.min(0.4, (B.walls || 0) / 1000);   // the city's walls add to the ring
+    if (u.side === 'D' && 'WG'.includes(t)) b += Math.min(0.5, (B.walls || 0) / 1000);   // the city's walls add to the ring: +0.3 at 300, +0.5 at 500 and above
+    const st = siteAt(B, u.c, u.r); if (st && st.type === 'tower' && !st.damaged) b += 0.25;   // the watchtower is a strong point
     return b;
   }
   const sideUnits = (B, side) => B.units.filter((u) => u.side === side);
@@ -198,7 +205,9 @@ const BATTLE = (() => {
     let pu = strength(B, u, ctx) * (!u.naval && 'rsl~'.includes(tu) ? 0.5 : 1);
     if (!u.naval && v.naval) pu *= 0.6;   // men on the bank against boats
     if (u.naval && !v.naval && !ranged) pu *= 0.85;   // marines fighting from the boats
-    if (tv === 'G' && !gateOpen(B, v.c, v.r) && !ranged) pu *= 0.7;   // storming a held gate is hard
+    if (!ranged && !u.naval && TERRAIN[tu].charge && TERRAIN[tv].charge && !insideWalls(tv) && holds(B, u.side, 'pasture')) pu *= 1.15;   // horsemen from the pasture charge across open ground
+    if (tv === 'G' && !gateOpen(B, v.c, v.r) && !ranged) pu *= Math.max(0.55, 0.7 - (B.walls || 0) / 6000);   // storming a held gate is hard, harder behind high walls
+    if (ranged && u.side === 'D' && 'WG'.includes(tu)) pu *= 1 + (B.walls || 0) / 2500;   // arrows from high walls carry further and strike harder
     if (ranged) pu *= 0.35;
     const pv = strength(B, v, ctx) * (1 + defenceBonus(B, v));
     const lossV = Math.round(v.troops * Math.min(0.35, 0.12 * Math.pow(pu / Math.max(1, pv), 1.0) * rnd(0.8, 1.2)));
@@ -308,6 +317,23 @@ const BATTLE = (() => {
     return { ok: true, turned: false, msg: `${name} spurns the offer${gold ? ' and keeps the gold' : ''}.` };
   }
 
+  // ---- outstations ----
+  // an attacker standing on an enemy outstation may put it to the torch: loot for the besiegers, and the place is ruined until repaired
+  const sackable = (B, u) => { const st = siteAt(B, u.c, u.r); return !!(st && u.side === 'A' && !u.acted && !st.damaged && !u.naval); };
+  function sack(B, u, ctx) {
+    const st = siteAt(B, u.c, u.r); if (!sackable(B, u)) return false;
+    st.damaged = true; st.holder = 'A'; u.acted = true; B.lastBlood = B.day;
+    const r = ctx.sackSite ? ctx.sackSite(st.i, u) : null;
+    if (r && r.food) B.att.food += r.food;
+    log(B, `${label(u, ctx)} puts the ${(r && r.name) || st.type} to the torch${r && r.text ? `: ${r.text}` : ''}.`, 'att');
+    for (const f of sideUnits(B, 'D')) f.morale = Math.max(0, f.morale - 3);
+    return true;
+  }
+  // who holds what, settled at the day's end; taking the watchtower heartens the takers
+  function settleSites(B, ctx) {
+    for (const st of B.sites || []) { const u = unitAt(B, st.c, st.r); if (u && u.side !== st.holder) { st.holder = u.side; if (!st.damaged) { log(B, `${label(u, ctx)} takes the ${ctx.siteName ? ctx.siteName(st.type) : st.type}.`, u.side === 'A' ? 'att' : 'def'); if (st.type === 'tower') u.morale = Math.min(100, u.morale + 5); } } }
+  }
+
   // ---- player and AI actions ----
   function moveUnit(B, u, c, r) {
     const d = reach(B, u, u.mp)[key(c, r)]; if (!d || d.cost === 0) return false;
@@ -319,7 +345,7 @@ const BATTLE = (() => {
   function ramGate(B, u, c, r) {
     if (u.acted || u.side !== 'A' || terrainAt(B, c, r) !== 'G' || hexDist(u.c, u.r, c, r) !== 1 || unitAt(B, c, r) || gateOpen(B, c, r)) return false;
     B.gates[key(c, r)] = (B.gates[key(c, r)] || 0) + 1; u.acted = true;
-    log(B, gateOpen(B, c, r) ? `${label(u)} breaks the gate open!` : `${label(u)} sets the ram against the gate (${(B.gates[key(c, r)] || 0)} of ${GATE_HITS} blows).`, 'att');
+    log(B, gateOpen(B, c, r) ? `${label(u)} breaks the gate open!` : `${label(u)} sets the ram against the gate (${(B.gates[key(c, r)] || 0)} of ${gateHits(B)} blows).`, 'att');
     return true;
   }
   const rammableFor = (B, u) => { const m = HEXMAPS[B.city]; return neighbours(u.c, u.r, m.w, m.h).filter(([c, r]) => terrainAt(B, c, r) === 'G' && !unitAt(B, c, r) && !gateOpen(B, c, r)); };
@@ -390,7 +416,14 @@ const BATTLE = (() => {
       // attacker
       const stalled = B.day - (B.lastBlood || 0) > 14;   // a fortnight without a fight: no more waiting
       const assault = ratio >= 0.9 || foodDays < 4 || ((!pending || stalled) && ratio >= 0.6);
-      if (!assault) { if (attackable.length && worth(attackable[0])) melee(B, u, attackable[0], ctx); continue; }   // wait for the reinforcements
+      if (sackable(B, u) && (ratio < 1 || B.day > 10 || foodDays < 10 || Math.random() < 0.3)) { sack(B, u, ctx); continue; }   // loot while the walls hold
+      if (!assault) {
+        if (attackable.length && worth(attackable[0])) { melee(B, u, attackable[0], ctx); continue; }
+        // nothing to do before the walls: walk to an outstation still standing and unheld
+        const prizes = (B.sites || []).filter((x) => !x.damaged && x.holder !== 'A' && !unitAt(B, x.c, x.r)).map((x) => key(x.c, x.r));
+        if (prizes.length && !u.naval) { const step = stepToward(B, u, prizes); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); } }
+        continue;   // wait for the reinforcements
+      }
       if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G')) { melee(B, u, attackable[0], ctx); continue; }
       const ram = rammableFor(B, u); if (ram.length) { ramGate(B, u, ram[0][0], ram[0][1]); continue; }
       // march: through an open gate to the centre, or up to the nearest gate (a hex beside it, since barred gates cannot be entered)
@@ -455,6 +488,7 @@ const BATTLE = (() => {
   }
   function beginDay(B) { B.day++; B.dayInMonth++; B.duelsToday = {}; for (const u of B.units) { u.mp = MP_PER_DAY; u.acted = false; } }
   function endDay(B, ctx) {
+    settleSites(B, ctx);
     // food
     const eatA = Math.ceil(sideTroops(B, 'A') * FOOD_PER_MAN_DAY), eatD = Math.ceil(sideTroops(B, 'D') * FOOD_PER_MAN_DAY);
     B.att.food -= eatA; const starvedD = !ctx.cityFood(-eatD);
@@ -481,11 +515,12 @@ const BATTLE = (() => {
   }
 
   // ---- creation ----
-  function create({ city, attF, defF, fromCity, troops, food, officers, training, walls, exit, cityTroops, cityOfficers, cityTraining, control, ctx, record, fleet = 0, cityFleet = 0 }) {
+  function create({ city, attF, defF, fromCity, troops, food, officers, training, walls, exit, cityTroops, cityOfficers, cityTraining, control, ctx, record, fleet = 0, cityFleet = 0, sites = [] }) {
     const m = HEXMAPS[city];
     const B = { city, attF, defF, day: 0, dayInMonth: 0, startedTurn: ctx.turn(), nextId: 0, units: [], arrivals: [], gates: {}, captives: [], log: [], over: null, walls,
       att: { fid: attF, from: fromCity, food, start: troops, fled: 0, exit, control: control.A, asked: false, fleet },
-      def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false, fleet: cityFleet }, replay: record ? [] : null };
+      def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false, fleet: cityFleet }, replay: record ? [] : null,
+      sites: sites.map((x, i) => ({ i, type: x.type, c: x.c, r: x.r, damaged: !!x.damaged, holder: 'D' })) };
     // the attacker: part of the army aboard ship when it has a fleet and there is water to sail
     const afloat = shipShare(troops, fleet, exit && (exit.type === 'river' || exit.type === 'sea'), m);
     const aAll = attachOfficers(splitArmy(troops - afloat).concat(splitArmy(afloat)), officers.map((n) => ctx.officer(n)).filter(Boolean));
@@ -508,6 +543,6 @@ const BATTLE = (() => {
     B.arrivals.push({ side, fid, from, troops, food: food || 0, officers: officers || [], training: training || 50, day: B.day + days, exit: exit || null, done: false, fleet: fleet || 0 });
   }
 
-  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, navigable, fleetCapacity, shipShare, hexDist, neighbours, deployDefender, deployAttacker, deployNaval,
+  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, navigable, fleetCapacity, shipShare, hexDist, neighbours, deployDefender, deployAttacker, deployNaval, siteAt, holds, sackable, sack, gateHits,
     create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, duel, champion, canChallenge, aiAcceptsDuel, answerChallenge, autoAnswer, melee, subornTargets, subornChance, suborn, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
 })();
