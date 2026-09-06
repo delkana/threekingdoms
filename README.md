@@ -835,8 +835,13 @@ its walls when they turn.
 
 **Watching.** With **Record battles for replay** on, every siege is recorded and
 its report offers a day-by-day replay on the map, in player games as well as in
-observer mode. Each day's log ends with a summary of the fallen, and hexes where
-blows fell that day pulse on the map.
+observer mode. An observer's **Battles** setting in the top bar chooses between
+being offered each replay in the month's reports, watching every siege as the
+month ends (auto-advance waits for them, and each follows the last on its own),
+or skipping them all. A replay plays at half to eight times speed, can be stepped
+a day at a time, jumped to its end, or skipped along with the rest of the
+month's sieges. Each day's log ends with a summary of the fallen, and hexes
+where blows fell that day pulse on the map.
 
 ## Population
 

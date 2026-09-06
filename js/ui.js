@@ -74,7 +74,7 @@ const UI = (() => {
       else if (k === 'Tab') { e.preventDefault(); cycleIdle(); }
     });
     $('#btn-auto').addEventListener('click', toggleAuto);
-    initAutoSpeed();
+    initAutoSpeed(); initWatchMode();
     // map-first chrome: the more-menu, the drawer, the chronicle ticker, the legend and the cinematic toggle
     $('#btn-more').addEventListener('click', (e) => { e.stopPropagation(); toggleMore(); });
     $('#more-menu').addEventListener('click', () => toggleMore(false));
@@ -204,6 +204,7 @@ const UI = (() => {
 
   function renderTop() {
     const S = Game.state();
+    if (S.observer && !S.watchSynced) { S.watchSynced = true; syncWatchOption(); }
     $('#tb-date').textContent = `${Game.dateStr()} · ${Game.season()}`;
     $('#auto-ctl').hidden = !S.observer;
     $('#btn-endturn').textContent = S.observer ? 'Next Month ▶' : 'End Month ▶';
@@ -1043,7 +1044,9 @@ const UI = (() => {
       const notices = Game.endTurn();
       renderAll();
       if (S.over) { stopAuto(); showGameOver(); return; }
-      if (notices.length && !autoTimer) showNotices(notices, () => {});
+      if (autoTimer) return;
+      const reps = watchMode() === 'all' ? notices.filter((n) => n.report && n.report.replay && n.report.replay.length).map((n) => n.report) : [];
+      playReplays(reps, () => { if (notices.length) showNotices(notices, () => {}); });
       return;
     }
     if (S.pendingCaptives.some((c) => c.captor === S.player)) { handleCaptives(endTurn); return; }
@@ -1074,7 +1077,7 @@ const UI = (() => {
   function showNotices(notices, done) {
     const S = Game.state();
     openModal(`<h3>${esc(Game.dateStr())} — Reports</h3>
-      <div class="notices">${notices.map((n, i) => `<div class="n ${n.cls}">${esc(n.text)}${n.report ? `<button class="btn-sm" data-act="rep" data-i="${i}">View battle</button>` : ''}</div>`).join('')}</div>
+      <div class="notices">${notices.map((n, i) => `<div class="n ${n.cls}">${esc(n.text)}${n.report && watchMode() !== 'skip' ? `<button class="btn-sm" data-act="rep" data-i="${i}">View battle</button>` : ''}</div>`).join('')}</div>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Continue</button></div>`, {
       close: () => { closeModal(); done(); },
       rep: (el) => showBattle(notices[+el.dataset.i].report, () => showNotices(notices, done)),
@@ -1233,6 +1236,7 @@ const UI = (() => {
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal });
   }
 
+  function syncWatchOption() { const S = Game.state(); if (S && S.observer) Game.setOption('watchBattles', watchMode() !== 'skip'); }
   function showMenu() {
     openModal(`<h3>Menu</h3>
       <div class="cmds">
@@ -1450,17 +1454,46 @@ const UI = (() => {
     });
   }
   // replay of an AI battle, frame by frame
-  function openReplay(R, done) {
-    BT.city = R.city; BT.replay = R; BT.frame = 0; BT.sel = null; BT.onDone = done;
+  // how sieges are shown to an observer: offered in the reports, watched every one, or skipped
+  const watchMode = () => { const sel = $('#watch-mode'); return sel ? sel.value : 'ask'; };
+  function initWatchMode() {
+    const sel = $('#watch-mode'); if (!sel) return;
+    try { const saved = localStorage.getItem('rotk_watch'); if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved; } catch (e) { /* ignore */ }
+    const apply = () => { try { localStorage.setItem('rotk_watch', sel.value); } catch (e) { /* ignore */ } if (Game.state()) Game.setOption('watchBattles', sel.value !== 'skip'); };
+    sel.addEventListener('change', apply);
+  }
+  const SPEEDS = [[1400, '½×'], [700, '1×'], [350, '2×'], [175, '4×'], [80, '8×']];
+  BT.speed = 1; try { const raw = localStorage.getItem('rotk_replay_speed'); const sv = raw === null ? 1 : +raw; if (sv >= 0 && sv < SPEEDS.length) BT.speed = sv; } catch (e) { /* ignore */ }
+  function replayTick() {
+    const R = BT.replay; if (!R) return;
+    if (BT.frame < R.replay.length - 1) { BT.frame++; renderReplay(); return; }
+    clearInterval(BT.timer); BT.timer = null; renderReplay();
+    if (BT.autoDone) setTimeout(() => { if (BT.replay === R) replayControl('done'); }, 900);   // in a sequence the next siege follows on its own
+  }
+  function startReplayTimer() { if (BT.timer) clearInterval(BT.timer); BT.timer = setInterval(replayTick, SPEEDS[BT.speed][0]); }
+  function openReplay(R, done, autoDone = false) {
+    BT.city = R.city; BT.replay = R; BT.frame = 0; BT.sel = null; BT.onDone = done; BT.autoDone = autoDone;
     $('#battle-screen').hidden = false; renderReplay();
-    BT.timer = setInterval(() => { if (BT.frame < R.replay.length - 1) { BT.frame++; renderReplay(); } else { clearInterval(BT.timer); BT.timer = null; renderReplay(); } }, 700);
+    startReplayTimer();
+  }
+  // several sieges in a row: the observer's auto-advance waits until they are done
+  function playReplays(reports, done) {
+    if (!reports.length) { done(); return; }
+    const wasAuto = !!autoTimer; if (wasAuto) { clearInterval(autoTimer); autoTimer = null; }
+    let i = 0;
+    BT.skipRest = false;
+    const next = () => { if (BT.skipRest) i = reports.length; if (i >= reports.length) { if (wasAuto && $('#btn-auto').classList.contains('on')) startAutoTimer(); done(); return; } openReplay(reports[i++], next, true); };
+    next();
   }
   function replayControl(act) {
     const R = BT.replay; if (!R) return;
     if (act === 'prev') BT.frame = Math.max(0, BT.frame - 1);
     else if (act === 'next') BT.frame = Math.min(R.replay.length - 1, BT.frame + 1);
-    else if (act === 'play') { if (BT.timer) { clearInterval(BT.timer); BT.timer = null; } else BT.timer = setInterval(() => { if (BT.frame < R.replay.length - 1) { BT.frame++; renderReplay(); } else { clearInterval(BT.timer); BT.timer = null; renderReplay(); } }, 700); }
-    else if (act === 'done') { const d = BT.onDone; closeBattle(); if (d) d(); return; }
+    else if (act === 'play') { if (BT.timer) { clearInterval(BT.timer); BT.timer = null; } else startReplayTimer(); }
+    else if (act === 'speed') { BT.speed = (BT.speed + 1) % SPEEDS.length; try { localStorage.setItem('rotk_replay_speed', String(BT.speed)); } catch (e) { /* ignore */ } if (BT.timer) startReplayTimer(); }
+    else if (act === 'skip') { BT.frame = R.replay.length - 1; if (BT.timer) { clearInterval(BT.timer); BT.timer = null; } }
+    else if (act === 'done') { const d = BT.onDone; BT.autoDone = false; closeBattle(); if (d) d(); return; }
+    else if (act === 'skipall') { const d = BT.onDone; BT.autoDone = false; closeBattle(); BT.skipRest = true; if (d) d(); return; }
     renderReplay();
   }
   function renderReplay() {
@@ -1472,7 +1505,7 @@ const UI = (() => {
     $('#bt-title').textContent = `The siege of ${Game.pname(R.city)} (replay)`; $('#bt-day').textContent = `Day ${f.day} of ${R.replay[R.replay.length - 1].day}${f.weather === 'rain' ? ' · ☔ rain' : f.weather === 'snow' ? ' · ❄ snow' : ''}${f.night ? ' · 🌙 night' : ''}`; $('#bt-food').textContent = '';
     $('#bt-sides').innerHTML = `<div class="side"><span><span class="chip" style="background:${unitColor(R.attacker)}"></span> ${esc(Game.fname(R.attacker))}</span><b>${fmt(f.units.filter((u) => u.side === 'A').reduce((a, u) => a + u.troops, 0))}</b></div><div class="side"><span><span class="chip" style="background:${unitColor(R.defender)}"></span> ${R.defender ? esc(Game.fname(R.defender)) : 'the town'}</span><b>${fmt(f.units.filter((u) => u.side === 'D').reduce((a, u) => a + u.troops, 0))}</b></div>`;
     $('#bt-unit').innerHTML = `<div class="hint">${esc(R.lines[R.lines.length - 1] ? R.lines[R.lines.length - 1].text : '')}</div>`;
-    $('#bt-actions').innerHTML = `<button data-act="prev">◂ Day</button><button data-act="next">Day ▸</button><button data-act="play">${BT.timer ? '❚❚ Pause' : '▶ Play'}</button><button class="btn-gold" data-act="done">Done</button>`;
+    $('#bt-actions').innerHTML = `<button data-act="prev">◂ Day</button><button data-act="next">Day ▸</button><button data-act="play">${BT.timer ? '❚❚ Pause' : '▶ Play'}</button><button data-act="speed" title="Replay speed">${SPEEDS[BT.speed][1]} speed</button><button data-act="skip" title="Jump to the end of this siege">▸▸ To the end</button><button class="btn-gold" data-act="done">${BT.autoDone ? 'Next ▸' : 'Done'}</button>${BT.autoDone ? '<button data-act="skipall" title="Skip the rest of this month\u2019s sieges">Skip the rest</button>' : ''}`;
     $('#bt-log').innerHTML = (f.log || []).map((t) => `<div>${esc(t)}</div>`).join('') || '<div class="hint">A quiet day.</div>';
   }
 
@@ -1716,6 +1749,8 @@ const UI = (() => {
       renderAll();
       if (S.over) { stopAuto(); showGameOver(); return; }
       const majors = notices.filter((n) => n.major);
+      const reps = watchMode() === 'all' ? notices.filter((n) => n.report && n.report.replay && n.report.replay.length).map((n) => n.report) : [];
+      if (reps.length) { playReplays(reps, () => { if (majors.length && $('#auto-pause').checked) { stopAuto(); showMajorEvents(majors); } }); return; }
       if (majors.length && $('#auto-pause').checked) { stopAuto(); showMajorEvents(majors); }
     }, autoInterval());
   }
