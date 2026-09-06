@@ -733,7 +733,7 @@ pass; defenders on the walls get up to +50% shelter, their arrows strike harder
 from high walls, and storming a held gate is harder behind them. A besieged
 lord raises his walls with Fortify as usual; the city falls when attackers hold its heart with no defenders
 left inside the walls (or the garrison reduced to less than a third of the
-besiegers), when they have held the heart through two days and nights without
+besiegers), when they have held the heart through three days and nights without
 being thrown out, or when every defender is gone. The garrison knows it: a unit
 stands on the heart from the first day, the nearest free defender refills it
 whenever it is empty, and every defender inside the walls turns on an enemy who

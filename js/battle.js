@@ -726,7 +726,7 @@ const BATTLE = (() => {
     const onHeart = A.some((u) => u.c === 6 && u.r === 5);
     const centreHeld = onHeart && (!dInside.length || sideTroops(B, 'D') < sideTroops(B, 'A') * 0.3);
     if (centreHeld) { B.over = { result: 'captured' }; log(B, `The attackers hold the heart of ${ctx.pname(B.city)}. The city has fallen!`, 'att'); return; }
-    if (onHeart && B.heartHolder === 'A' && B.heartDay != null && B.day > B.heartDay + 1) { B.over = { result: 'captured' }; log(B, `The besiegers have held the heart of ${ctx.pname(B.city)} for two days and nights, and the garrison could not throw them out. The city has fallen!`, 'att'); }
+    if (onHeart && B.heartHolder === 'A' && B.heartDay != null && B.day > B.heartDay + 2) { B.over = { result: 'captured' }; log(B, `The besiegers have held the heart of ${ctx.pname(B.city)} for three days and nights, and the garrison could not throw them out. The city has fallen!`, 'att'); }
   }
   // the day's weather follows the season: rain in spring and summer, snow in a northern winter
   function rollWeather(B) {
