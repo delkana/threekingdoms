@@ -1144,6 +1144,227 @@ const EVENTS = [
       return `${ctx.r} takes the seat of ${E.fname(ctx.fid)} untried. ${E.fname(ctx.n)} sharpens its swords at the news, and the older officers wonder aloud whom they now serve.`;
     },
   },
+  // ---------------------------------------------------------- Ma Teng and the west
+  {
+    id: 'brothers-of-liang', title: 'The brothers of Liang',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const M = S.factions.mateng; if (!M || !M.alive || M.guest || E.factionProvinces('mateng').length < 2) return null;
+      const hs = S.officers['Han Sui']; if (!hs || hs.faction !== 'mateng' || hs.captive || hs.name === M.ruler) return null;
+      return Math.random() < 0.06 ? { fid: 'mateng', city: hs.city } : null;
+    },
+    decision: {
+      house: 'mateng',
+      prompt: (E, S, ctx) => `Han Sui and ${E.rulerOf('mateng').name} swore brotherhood on the Tao years ago; now their households feud, a wife is dead, and Han Sui\u2019s riders no longer answer the summons from ${E.pname(ctx.city)}.`,
+      options: [
+        { label: 'Buy peace with gold and a rank', ai: 0.5, apply: (E, S, ctx) => { E.gold('mateng', -1500); const hs = S.officers['Han Sui']; hs.loyalty = 95; hs.rank = Math.max(hs.rank || 0, 2); return `${E.rulerOf('mateng').name} sends Han Sui gold, horses and a general\u2019s seal, and the two old men weep and drink together. The Liang riders ride as one again.`; } },
+        { label: 'Let the feud run its course', ai: 0.5, apply: (E, S, ctx) => {
+          const hs = S.officers['Han Sui'];
+          if (ctx.city !== seatOf(E, 'mateng') && S.provinces[ctx.city].owner === 'mateng') { E.foundHouse({ id: `hansui-${S.turn}`, name: 'Han Sui', ruler: 'Han Sui', color: '#b08850', cities: [ctx.city], aggr: 1.1, persona: ['reckless'] }); return `Han Sui raises his own banner over ${E.pname(ctx.city)}. Liang is at war with itself, brother against sworn brother.`; }
+          hs.faction = null; hs.loyalty = 0; return `Han Sui rides away into the Qiang country with his household. The brotherhood of Liang is finished.`;
+        } },
+      ],
+    },
+  },
+  {
+    id: 'summoned-to-court', title: 'Summoned to court',
+    from: [205, 1], to: [280, 12],
+    when: (E, S) => {
+      const M = S.factions.mateng; if (!M || !M.alive || M.guest || M.ruler !== 'Ma Teng' || flags(S).maTengCourt) return null;
+      const mc = S.officers['Ma Chao']; if (!mc || mc.faction !== 'mateng' || mc.captive) return null;
+      const H = Object.values(S.factions).find((f) => f.alive && f.hasEmperor && !f.raider && f.id !== 'mateng'); if (!H) return null;
+      return Math.random() < 0.1 ? { fid: 'mateng', h: H.id } : null;
+    },
+    decision: {
+      house: 'mateng',
+      prompt: (E, S, ctx) => `An edict arrives from the Emperor\u2019s court at ${E.pname(seatOf(E, ctx.h))}: Ma Teng is named to high office and bidden to come and take it up, leaving the west to his son. Everyone knows whose hand wrote the edict. To refuse is to defy ${E.fname(ctx.h)}; to go is to live as a hostage in silk.`,
+      options: [
+        { label: 'Obey the summons and hand the west to Ma Chao', ai: 0.6, apply: (E, S, ctx) => {
+          const M = S.factions.mateng; M.ruler = 'Ma Chao'; M.name = M.dynasty || 'Ma Chao'; S.officers['Ma Chao'].loyalty = 100;
+          E.joinHouse('Ma Teng', ctx.h, 80, seatOf(E, ctx.h), true);
+          E.shiftRelation('mateng', ctx.h, 30); flags(S).maTengCourt = { host: ctx.h, turn: S.turn };
+          return `Ma Teng rides east with his household to serve at court, and the west passes to Ma Chao. ${E.fname(ctx.h)} treats the old lord with every honour, and watches him.`;
+        } },
+        { label: 'Refuse the edict', ai: 0.4, apply: (E, S, ctx) => { E.shiftRelation('mateng', ctx.h, -30); E.prestige('mateng', 5); flags(S).maTengCourt = 'refused'; return `Ma Teng sends the envoy back with a gift of horses and no answer. The men of Liang cheer; ${E.fname(ctx.h)} does not forget.`; } },
+      ],
+    },
+  },
+  {
+    id: 'hostages-at-court', title: 'Hostages at court',
+    from: [205, 1], to: [280, 12],
+    when: (E, S) => {
+      const c = flags(S).maTengCourt; if (!c || typeof c !== 'object') return null;
+      const mt = S.officers['Ma Teng']; const M = S.factions.mateng, H = S.factions[c.host];
+      if (!mt || mt.faction !== c.host || !M || !M.alive || !H || !H.alive) return null;
+      const struck = (M.lastAttackTarget === c.host && S.turn - M.lastAttackTurn <= 2) || M.warTarget === c.host;
+      return struck ? { host: c.host } : null;
+    },
+    apply: (E, S, ctx) => { E.kill('Ma Teng', 'executed at the capital together with his household, when his son took up arms against his host'); for (const n of ['Ma Tie', 'Ma Xiu']) if (S.officers[n] && S.officers[n].faction === ctx.host) E.killQuiet(n, 'executed with his father'); E.setRelation('mateng', ctx.host, -100); flags(S).maTengCourt = 'executed'; return `Word of Ma Chao\u2019s rising reaches the court. Ma Teng and every member of his household in the capital are put to death, and the west swears vengeance.`; },
+  },
+  {
+    id: 'tong-pass', title: 'Tong Pass',
+    from: [208, 1], to: [280, 12],
+    when: (E, S) => {
+      const M = S.factions.mateng; if (!M || !M.alive || M.guest) return null;
+      const mc = S.officers['Ma Chao']; if (!mc || mc.faction !== 'mateng' || mc.captive) return null;
+      const G = S.provinces.changan.owner; if (!G || G === 'mateng' || !S.factions[G].alive || S.factions[G].raider || !E.canAttack('mateng', G)) return null;
+      if (E.factionProvinces(G).length < E.factionProvinces('mateng').length * 2 || !E.bordering('mateng', G)) return null;
+      const front = frontCity(E, S, 'mateng', G); if (!front || Math.random() > 0.12) return null;
+      return { g: G, front: front.id };
+    },
+    apply: (E, S, ctx) => { const p = S.provinces[ctx.front]; p.troops += 12000; p.training = Math.min(100, p.training + 10); E.warTarget('mateng', ctx.g, 24); E.prestige('mateng', 5); S.factions.mateng.aggr = Math.max(S.factions.mateng.aggr, 1.4); return `Ma Chao raises the Qiang and the Di. Ten thousand frontier riders gather at ${E.pname(ctx.front)}, and the Splendid leads them against ${E.fname(ctx.g)} at Tong Pass.`; },
+  },
+  {
+    id: 'ma-chao-seeks-master', title: 'Ma Chao seeks a master',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const M = S.factions.mateng; if (!M || M.alive) return null;
+      const mc = S.officers['Ma Chao']; if (!mc || mc.captive || mc.faction) return null;
+      const hz = S.provinces.hanzhong.owner, cd = S.provinces.chengdu.owner;
+      const to = [hz, cd].find((f) => f && S.factions[f].alive && !S.factions[f].raider && !S.factions[f].guest);
+      return to ? { to } : null;
+    },
+    apply: (E, S, ctx) => {
+      const seat = seatOf(E, ctx.to); E.joinHouse('Ma Chao', ctx.to, 70, seat, true);
+      const md = S.officers['Ma Dai']; if (md && !md.faction && !md.captive) E.joinHouse('Ma Dai', ctx.to, 70, seat, true);
+      S.provinces[seat].troops += 5000; flags(S).maChaoHost = { fid: ctx.to, turn: S.turn };
+      return `Ma Chao, his father\u2019s house destroyed and his family slaughtered, rides in from the Qiang country with his cousin Ma Dai and a retinue of frontier horsemen, and offers his sword to ${E.fname(ctx.to)}.`;
+    },
+  },
+  {
+    id: 'ma-chao-rides-west', title: 'Ma Chao rides west',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const h = flags(S).maChaoHost; if (!h || S.turn - h.turn < 12) return null;
+      const mc = S.officers['Ma Chao']; if (!mc || mc.captive || mc.faction !== h.fid) return null;
+      const W = S.provinces.chengdu.owner; if (!W || W === h.fid || !S.factions[W].alive || S.factions[W].raider || S.factions[W].guest) return null;
+      if (E.factionProvinces(W).length < 4 || Math.random() > 0.1) return null;
+      return { from: h.fid, to: W };
+    },
+    apply: (E, S, ctx) => { const seat = seatOf(E, ctx.to); E.joinHouse('Ma Chao', ctx.to, 90, seat, true); const md = S.officers['Ma Dai']; if (md && md.faction === ctx.from && !md.captive) E.joinHouse('Ma Dai', ctx.to, 85, seat, true); flags(S).maChaoHost = null; E.shiftRelation(ctx.from, ctx.to, -15); return `Slandered at ${E.fname(ctx.from)}\u2019s court and trusted by no one there, Ma Chao slips away with Ma Dai and rides to ${E.pname(seat)}, where ${E.rulerOf(ctx.to).name} receives him as a brother.`; },
+  },
+  // ---------------------------------------------------------- Gongsun Zan and the north
+  {
+    id: 'liu-yu', title: 'Liu Yu',
+    from: [192, 1], to: [196, 12],
+    when: (E, S) => { const G = S.factions.gongsunzan; return G && G.alive && !G.guest && Math.random() < 0.15 ? { fid: 'gongsunzan' } : null; },
+    decision: {
+      house: 'gongsunzan',
+      prompt: () => `Liu Yu, Governor of You Province, is beloved by the people and the tribes alike, and he has never approved of Gongsun Zan\u2019s wars. His treasury and his levies sit within reach. He could be seized on a charge of treason; or he could be left to his benevolence.`,
+      options: [
+        { label: 'Seize Liu Yu on a charge of treason', ai: 0.6, apply: (E, S) => { E.gold('gongsunzan', 3000); S.provinces[seatOf(E, 'gongsunzan')].troops += 8000; E.prestige('gongsunzan', -20); for (const p of E.factionProvinces('gongsunzan')) p.order = Math.max(0, p.order - 10); for (const f of Object.values(S.factions)) if (f.alive && f.id !== 'gongsunzan') E.shiftRelation('gongsunzan', f.id, -10); return `Liu Yu is beheaded in the market of Ji on a forged charge. His treasury and his levies pass to Gongsun Zan, and the whole north calls him a murderer.`; } },
+        { label: 'Spare him', ai: 0.4, apply: (E) => { E.prestige('gongsunzan', 10); return `Gongsun Zan lets the old governor be. "Let him feed the people; I will fight the wars." The north thinks better of him for it.`; } },
+      ],
+    },
+  },
+  {
+    id: 'white-riders', minor: true, title: 'The White Riders', repeat: true,
+    from: [190, 1], to: [280, 12],
+    when: (E, S) => {
+      const G = S.factions.gongsunzan; if (!G || !G.alive || G.guest) return null;
+      const raider = ['wuhuan', 'xianbei'].map((f) => S.factions[f]).find((f) => f && f.alive && G.lastAttackTarget === f.id && S.turn - G.lastAttackTurn <= 3 && S.turn - (f.lastLoss || -99) <= 3);
+      return raider ? { raider: raider.id } : null;
+    },
+    apply: (E, S, ctx) => { E.prestige('gongsunzan', 5); for (const p of E.factionProvinces('gongsunzan')) p.training = Math.min(100, p.training + 5); E.shiftRelation('gongsunzan', ctx.raider, -20); return `Gongsun Zan\u2019s White Riders run down the ${E.fname(ctx.raider)} horsemen and bring back their herds. The tribes teach their children to fear white horses.`; },
+  },
+  {
+    id: 'zhao-yun-leaves', title: 'Zhao Yun takes leave',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const G = S.factions.gongsunzan, L = S.factions.liubei; if (!G || !G.alive || !L || !L.alive) return null;
+      const zy = S.officers['Zhao Yun']; if (!zy || zy.faction !== 'gongsunzan' || zy.captive) return null;
+      const faltering = E.factionProvinces('gongsunzan').length <= 2 || S.turn - (G.lastLoss || -99) <= 12 || S.year >= 200;
+      return faltering && Math.random() < 0.1 ? { fid: 'gongsunzan' } : null;
+    },
+    decision: {
+      house: 'gongsunzan',
+      prompt: () => `Zhao Yun asks leave to go home and mourn his elder brother. Everyone at court knows where the road from his home leads: to Liu Bei, whom he has loved since they shared a tent in the coalition years.`,
+      options: [
+        { label: 'Let him go with honour', ai: 0.6, apply: (E, S) => { const L = S.factions.liubei; const dest = L.guest ? E.rulerOf('liubei').city : seatOf(E, 'liubei'); E.joinHouse('Zhao Yun', 'liubei', 100, dest, true); E.prestige('gongsunzan', 5); E.shiftRelation('gongsunzan', 'liubei', 20); return `Gongsun Zan gives Zhao Yun a white horse and lets him ride. He does not come back; he is Liu Bei\u2019s man now, and will be to the end of his days.`; } },
+        { label: 'Refuse him leave', ai: 0.4, apply: (E, S) => { S.officers['Zhao Yun'].loyalty = Math.max(0, S.officers['Zhao Yun'].loyalty - 30); return `Zhao Yun is kept at his post. He serves without complaint and without warmth, and his eyes turn south whenever Liu Bei\u2019s name is spoken.`; } },
+      ],
+    },
+  },
+  {
+    id: 'tower-of-yijing', title: 'The tower of Yijing',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const G = S.factions.gongsunzan; if (!G || !G.alive || G.guest || flags(S).yijing || E.factionProvinces('gongsunzan').length > 2) return null;
+      const foe = Object.values(S.factions).filter((f) => f.alive && !f.raider && f.id !== 'gongsunzan' && E.bordering(f.id, 'gongsunzan') && E.canAttack(f.id, 'gongsunzan') && E.totalTroops(f.id) >= E.totalTroops('gongsunzan') * 3).sort((a, b) => E.totalTroops(b.id) - E.totalTroops(a.id))[0];
+      return foe && Math.random() < 0.2 ? { fid: 'gongsunzan', foe: foe.id } : null;
+    },
+    decision: {
+      house: 'gongsunzan',
+      prompt: (E, S, ctx) => `${E.fname(ctx.foe)} presses from every side. At Yijing Gongsun Zan has built a tower of iron gates and earthen walls ten fathoms high, with grain for ten years. He could shut himself in and let the storm blow itself out; his generals outside would be left to fend for themselves.`,
+      options: [
+        { label: 'Withdraw into the tower', ai: 0.6, apply: (E, S, ctx) => { const seat = S.provinces[seatOf(E, 'gongsunzan')]; seat.defense = 999; seat.food += 80000; for (const o of E.factionOfficers('gongsunzan')) if (o.name !== 'Gongsun Zan') o.loyalty = Math.max(0, o.loyalty - 20); flags(S).yijing = { turn: S.turn }; return `Gongsun Zan shuts the iron gates of Yijing with his women and his grain and lets no man in. "When my generals are hard pressed I will not save them, lest they learn to rely on me." They learn instead to despise him.`; } },
+        { label: 'Sally forth with the White Riders', ai: 0.4, apply: (E, S, ctx) => { const seat = S.provinces[seatOf(E, 'gongsunzan')]; seat.troops += 6000; seat.training = Math.min(100, seat.training + 10); E.prestige('gongsunzan', 5); E.warTarget('gongsunzan', ctx.foe, 12); return `Gongsun Zan will not die behind walls. The White Riders pour out of Yijing for one more campaign.`; } },
+      ],
+    },
+  },
+  {
+    id: 'yijing-despair', minor: true, title: 'Despair in the tower', repeat: true,
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => { const y = flags(S).yijing; const G = S.factions.gongsunzan; return y && typeof y === 'object' && G && G.alive && S.turn - y.turn <= 48 && Math.random() < 0.08 ? {} : null; },
+    apply: (E, S) => { for (const o of E.factionOfficers('gongsunzan')) if (o.name !== 'Gongsun Zan') o.loyalty = Math.max(0, o.loyalty - 8); for (const p of E.factionProvinces('gongsunzan')) p.order = Math.max(0, p.order - 5); return `Behind the iron gates Gongsun Zan sees no one but his women and his soothsayers. Outside, his officers go unpaid and unvisited, and their letters come back unopened.`; },
+  },
+  // ---------------------------------------------------------- Zhang Lu and Hanzhong
+  {
+    id: 'charity-houses', minor: true, title: 'The charity houses', repeat: true,
+    from: [190, 1], to: [280, 12],
+    when: (E, S) => { const Z = S.factions.zhanglu; return Z && Z.alive && !Z.guest && S.provinces.hanzhong.owner === 'zhanglu' && Math.random() < 0.08 ? {} : null; },
+    apply: (E, S) => {
+      const p = S.provinces.hanzhong; p.order = Math.min(100, p.order + 8); p.pop = Math.floor(p.pop * 1.04); p.food += 5000;
+      const great = Object.values(S.factions).filter((f) => f.alive && !f.raider && f.id !== 'zhanglu').sort((a, b) => E.factionProvinces(b.id).length - E.factionProvinces(a.id).length).slice(0, 2);
+      for (const f of great) E.shiftRelation('zhanglu', f.id, -5);
+      return `The Celestial Masters open charity houses along the roads of Hanzhong where any traveller may eat his fill of rice and meat. Refugees pour in from the wars; the great lords sneer at the "rice thieves".`;
+    },
+  },
+  {
+    id: 'yang-songs-price', title: 'Yang Song\u2019s price',
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      const Z = S.factions.zhanglu; if (!Z || !Z.alive || Z.guest || S.provinces.hanzhong.owner !== 'zhanglu' || flags(S).yangSong) return null;
+      const A = Object.entries(Z.attackedBy || {}).filter(([f, t]) => S.turn - t <= 3 && S.factions[f] && S.factions[f].alive && !S.factions[f].raider).map(([f]) => f)[0]; if (!A) return null;
+      const gen = E.factionOfficers('zhanglu').filter((o) => o.name !== Z.ruler && o.war >= 85 && !o.captive).sort((a, b) => b.war - a.war)[0]; if (!gen) return null;
+      return Math.random() < 0.3 ? { fid: 'zhanglu', a: A, gen: gen.name } : null;
+    },
+    decision: {
+      house: 'zhanglu',
+      prompt: (E, S, ctx) => `Yang Song, greediest of Zhang Lu\u2019s ministers, has taken ${E.fname(ctx.a)}\u2019s gold and whispers that ${ctx.gen} means to go over to the enemy. ${ctx.gen} has heard the whispers too. Yang Song will hold his tongue, for a price.`,
+      options: [
+        { label: 'Pay Yang Song and keep the general', ai: 0.5, apply: (E, S, ctx) => { E.gold('zhanglu', -1200); const g = S.officers[ctx.gen]; g.loyalty = Math.min(100, g.loyalty + 10); flags(S).yangSong = S.turn; return `Zhang Lu pays. Yang Song falls silent, ${ctx.gen} is sent a robe and a horse, and the walls of Hanzhong keep their best defender.`; } },
+        { label: 'Refuse the bribe-taker', ai: 0.5, apply: (E, S, ctx) => { E.joinHouse(ctx.gen, ctx.a, 75, null, true); flags(S).yangSong = S.turn; return `Zhang Lu will not be blackmailed. The whispers grow until ${ctx.gen}, fearing the executioner more than the enemy, rides out of Hanzhong and surrenders to ${E.fname(ctx.a)}.`; } },
+      ],
+    },
+  },
+  {
+    id: 'sealed-granaries', title: 'The sealed granaries',
+    from: [210, 1], to: [280, 12],
+    when: (E, S) => {
+      const Z = S.factions.zhanglu; if (!Z || !Z.alive || Z.guest || S.provinces.hanzhong.owner !== 'zhanglu') return null;
+      const mine = E.factionProvinces('zhanglu').length;
+      const G = S.adj.hanzhong.map((c) => S.provinces[c].owner).filter((f) => f && f !== 'zhanglu' && S.factions[f].alive && !S.factions[f].raider && E.canAttack(f, 'zhanglu') && E.factionProvinces(f).length >= mine * 2.5)
+        .sort((a, b) => E.totalTroops(b) - E.totalTroops(a))[0];
+      return G && Math.random() < 0.12 ? { fid: 'zhanglu', g: G } : null;
+    },
+    decision: {
+      house: 'zhanglu',
+      prompt: (E, S, ctx) => `${E.fname(ctx.g)}\u2019s army has forced the Yangping pass and stands before Hanzhong. Zhang Lu\u2019s brother would burn the granaries and flee into the Ba hills. Zhang Lu answers: "The granaries belong to the state. Seal them, and let the conqueror find them full."`,
+      options: [
+        { label: 'Surrender with the granaries sealed', ai: 0.6, apply: (E, S, ctx) => {
+          const cities = E.factionProvinces('zhanglu').map((p) => p.id); const offs = E.factionOfficers('zhanglu').map((o) => o.name);
+          for (const c of cities) E.transferCity(c, ctx.g);
+          for (const n of offs) E.joinHouse(n, ctx.g, n === 'Zhang Lu' ? 90 : 75, null, true);
+          const zl = S.officers['Zhang Lu']; if (zl) zl.rank = Math.max(zl.rank || 0, 2);
+          if (S.factions.zhanglu.alive) E.dissolveHouse('zhanglu');
+          E.prestige(ctx.g, 15); E.gold(ctx.g, 2000);
+          return `Zhang Lu comes out of Hanzhong and kneels, the granaries sealed and full behind him. ${E.rulerOf(ctx.g).name}, moved, makes him a marquis and treats his officers with honour. The Celestial Masters\u2019 state passes without a fire lit.`;
+        } },
+        { label: 'Hold the Yangping pass', ai: 0.4, apply: (E, S, ctx) => { const p = S.provinces.hanzhong; p.defense = Math.min(999, p.defense + 150); p.troops += 5000; E.prestige('zhanglu', 5); E.warTarget(ctx.g, 'zhanglu', 18); return `Zhang Lu\u2019s brother has his way. The pass is manned, the granaries guarded, and Hanzhong waits for the storm.`; } },
+      ],
+    },
+  },
 ];
 
 // Objectives: hold a set of cities (or a custom test) within a window, for a reward.

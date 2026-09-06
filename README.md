@@ -240,6 +240,18 @@ world the game has produced.
   his heir may raise **Shi Hui's revolt** against the overlord. And any house
   whose seat passes to a **young lord** finds its neighbours bolder and its
   officers restless for a year.
+- **The west and the north.** Ma Teng's sworn brother Han Sui feuds with him
+  (**the brothers of Liang**) and may found his own house; the Emperor's holder
+  **summons Ma Teng to court**, and if the Ma house then takes up arms against
+  that host, the **hostages at court** are executed. Ma Chao raises the Qiang
+  at **Tong Pass**, and when his house falls he **seeks a master** at Hanzhong
+  or Chengdu, then **rides west** to the Shu kingdom. Gongsun Zan chooses
+  whether to murder **Liu Yu**, earns prestige with his **White Riders**
+  against the nomads, may let **Zhao Yun take leave** for Liu Bei, and at the
+  end withdraws into **the tower of Yijing**, where despair eats his officers'
+  loyalty. Zhang Lu's **charity houses** draw refugees and scorn, **Yang Song's
+  price** costs him gold or his best general, and **the sealed granaries** let
+  him surrender Hanzhong with honour to a giant at the pass.
 - **The world at large.** A frontier general of low loyalty declares for
   himself and founds a house. A succession with a rival heir away from the seat
   may split a large realm in two. A great plague empties cities and kills
