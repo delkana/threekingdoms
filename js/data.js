@@ -109,7 +109,6 @@ const TRAIT_INFO = {
 const ROADS = [
   // the north-west: Hexi corridor, Tao and Wei valleys, the Long mountains
   ['xiliang', 'longxi', 'plain'],
-  ['xiliang', 'tianshui', 'plain'],
   ['longxi', 'tianshui', 'pass'],
   ['longxi', 'wudu', 'pass'],               // over the Min mountains
   ['tianshui', 'changan', 'pass'],          // the Long pass into the Wei valley

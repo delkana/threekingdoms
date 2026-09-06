@@ -51,7 +51,7 @@ Yangtze; Longxi and Wudu on the Shu-Wei frontier; Zangke, which links Nanzhong
 to the south; Hepu on the pearl coast between Nanhai and Jiaozhi; Jian'an behind the Wuyi
 mountains on the Fujian coast; and Donglai at the tip of Shandong.
 
-The 110 roads were laid out on the real geography: rivers are crossed where
+The 109 roads were laid out on the real geography: rivers are crossed where
 the fords and ferries were (Puban, Mengjin, the Three Gorges, the Qiantang),
 passes sit where the mountains force them (Tong, Hukou, Jingxing, Yanmen,
 Juyong, Wusheng, Meiling, the Lingqu canal), and long diagonal roads of the
