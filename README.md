@@ -652,11 +652,11 @@ in a five-year alliance.
 Every city's population grows (faster in spring, faster at peace, and faster
 the further it stands below its ceiling) toward a limit set by its size: about
 260,000 for a town, 520,000 for a city and 900,000 for a great city. Orderly
-cities below three fifths of their ceiling draw settlers back, and the
+cities below half their ceiling draw a trickle of settlers back, and the
 **Resettle** command (600 gold) brings refugees to empty fields in a single
-season. A levy takes men from the fields but their households remain, so
-conscription costs the land two people for every five soldiers rather than one
-for one. Sustainable levies are capped at 22% of the population. Population caps sustainable
+season. A levy takes men from the fields but some of their households remain,
+so conscription costs the land seven people for every ten soldiers rather than
+one for one. Sustainable levies are capped at 22% of the population. Population caps sustainable
 levies, shrinks when a city is sacked or conscripted, and no longer depends on
 a regional trait.
 

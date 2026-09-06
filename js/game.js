@@ -262,7 +262,7 @@ const Game = (() => {
     if (horses) n = Math.floor(n * 1.25);
     n = Math.min(n, Math.floor(p.pop * 0.04));
     p.gold -= Math.round(rc);
-    p.pop -= Math.floor(n * 0.4);
+    p.pop -= Math.floor(n * 0.7);
     // green recruits dilute training (frontier riders less so)
     p.training = Math.round((p.training * p.troops + (horses ? 45 : 30) * n) / (p.troops + n));
     p.troops += n;
@@ -333,7 +333,7 @@ const Game = (() => {
     if (p.order < 40) return fail('Nobody settles in a lawless city: restore order first.');
     const cap = popCapOf(p); if (p.pop >= cap * 0.95) return fail(`${pname(pid)} is as full as its land can feed.`);
     const o = off(name);
-    const gain = Math.min(cap - p.pop, Math.floor(cap * 0.012 + o.pol * 40 + ri(0, 1500)) * (hasSkill(o, 'admin') ? 1.4 : 1));
+    const gain = Math.min(cap - p.pop, Math.floor(cap * 0.006 + o.pol * 25 + ri(0, 800)) * (hasSkill(o, 'admin') ? 1.4 : 1));
     p.gold -= COST.resettle; const before = p.pop; p.pop += Math.floor(gain); p.order = clamp(p.order + 1, 0, 100); o.acted = true;
     return ok(`${o.name} brought settlers and refugees to the empty fields of ${pname(pid)}: population ${fmt(before)} → ${fmt(p.pop)}.`);
   }
@@ -1835,8 +1835,8 @@ const Game = (() => {
       }
       const popCap = popCapOf(p);
       const atPeace = !S.adj[p.id].some((n) => prov(n).owner && prov(n).owner !== p.owner && canAttack(p.owner, prov(n).owner));
-      const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.6 ? Math.floor(popCap * 0.0015) : 0;   // refugees return to orderly, half-empty land
-      p.pop += Math.floor(p.pop * 0.008 * (isSpring() ? 1.5 : 1) * (atPeace ? 1.5 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
+      const settlers = p.owner && (p.order == null || p.order >= 55) && p.pop < popCap * 0.45 ? Math.floor(popCap * 0.0006) : 0;   // refugees return to orderly, half-empty land
+      p.pop += Math.floor(p.pop * 0.004 * (isSpring() ? 1.5 : 1) * (atPeace ? 1.25 : 1) * Math.max(0, 1 - p.pop / popCap)) + settlers;
       // order: a garrison and a governor keep the peace; neglect breeds revolt
       const garrisoned = p.troops >= p.pop / 60 || officersIn(p.id, p.owner).length > 0;
       const realm = factionProvinces(p.owner).length;
@@ -2318,7 +2318,7 @@ const Game = (() => {
         const rich = p.gold > 4000;
         const builder = has(fid, 'builder');
         if (p.order < (phase === 'rising' ? 55 : 70) && p.gold >= COST.pacify) pacify(p.id, o.name);
-        else if (p.gold >= COST.resettle && p.order >= 40 && p.pop < popCapOf(p) * (p.gold > 4000 ? 0.85 : 0.5)) resettle(p.id, o.name);
+        else if (p.gold >= COST.resettle && p.order >= 40 && p.pop < popCapOf(p) * (p.gold > 6000 ? 0.6 : 0.4)) resettle(p.id, o.name);
         else if (p.gold >= COST.develop && (foodMonths < 8 || p.agri < 200) && p.agri < 999) develop(p.id, o.name, 'agri');
         else if (rich && foodMonths < 12) buyFood(p.id, 2000), search(p.id, o.name);
         else if (needFleet && p.gold >= COST.ships) buildShips(p.id, o.name);
