@@ -1256,6 +1256,7 @@ const Game = (() => {
     for (const o of factionOfficers(fid)) if (o.name !== heir.name) o.loyalty = clamp(o.loyalty - ri(5, 15), 0, 100);
     notice(`${deathText} ${heir.name} succeeds as lord of the house.`, 'hist', { major: true });
     if (fid === S.player && cands.length > 1) S.pendingSuccession = { fid, candidates: cands.map((c) => c.name) };
+    else checkRestorations();
   }
 
   function chooseHeir(fid, name) {
@@ -1266,6 +1267,7 @@ const Game = (() => {
     F.ruler = name; F.name = F.dynasty || name; o.loyalty = 100;
     F.lastSuccession = { turn: S.turn, rival: (S.pendingSuccession && S.pendingSuccession.candidates || []).find((n) => n !== name) || null };
     S.pendingSuccession = null;
+    checkRestorations();
     return ok(`${name} takes the seat of the house.`, 'hist');
   }
 
@@ -1673,8 +1675,48 @@ const Game = (() => {
   function snapshotMonth() { try { monthStart = JSON.stringify(S); } catch (e) { monthStart = null; } }
   function undoMonth() { if (!monthStart) return false; S = JSON.parse(monthStart); return true; }
   const canUndo = () => !!monthStart;
+  // ---------- a founder reclaims his house ----------
+  // If the founding lord of a fallen house comes to rule another house (by succession, coup or a new banner),
+  // that house becomes his original house again: its id, colour, persona and unfired events all return.
+  const FOUNDERS = Object.fromEntries(FACTIONS.map((f) => [f.ruler, f.id]).concat([['L\u00fc Bu', 'lubu']]));
+  const rekey = (v, from, to) => (v === from ? to : v);
+  function restoreHouse(fid, origId) {
+    const F = S.factions[fid]; const base = FACTIONS.find((f) => f.id === origId);
+    const dead = S.factions[origId];
+    const R = { ...F, id: origId, color: base ? base.color : (dead ? dead.color : F.color), persona: base ? base.persona || [] : (dead ? dead.persona : F.persona), aggr: base ? base.aggr : F.aggr, name: F.dynasty || F.ruler, wanderer: base ? !!base.wanderer : F.wanderer };
+    S.factions[origId] = R;
+    F.alive = false; F.guest = false; F.host = null; F.hasEmperor = false;
+    for (const p of Object.values(S.provinces)) if (p.owner === fid) p.owner = origId;
+    for (const o of allOfficers()) { if (o.faction === fid) o.faction = origId; if (o.captive === fid) o.captive = origId; }
+    for (const c of S.pendingCaptives) { c.captor = rekey(c.captor, fid, origId); c.from = rekey(c.from, fid, origId); }
+    for (const pr of S.pendingProposals || []) pr.from = rekey(pr.from, fid, origId);
+    for (const [k, d] of Object.entries(S.diplomacy)) {
+      const [a, b] = k.split('|'); if (a !== fid && b !== fid) continue;
+      const na = rekey(a, fid, origId), nb = rekey(b, fid, origId); if (na === nb) { delete S.diplomacy[k]; continue; }
+      S.diplomacy[na < nb ? `${na}|${nb}` : `${nb}|${na}`] = d; delete S.diplomacy[k];
+    }
+    for (const f of Object.values(S.factions)) {
+      if (f.host === fid) f.host = origId;
+      if (f.warTarget === fid) f.warTarget = origId;
+      if (f.lastAttackTarget === fid) f.lastAttackTarget = origId;
+      if (f.plan && f.plan.enemy === fid) f.plan.enemy = origId;
+      if (f.attackedBy && f.attackedBy[fid] != null) { f.attackedBy[origId] = f.attackedBy[fid]; delete f.attackedBy[fid]; }
+    }
+    if (S.player === fid) S.player = origId;
+    if (S.hanEnded && S.hanEnded.by === fid) S.hanEnded.by = origId;
+    notice(`${R.ruler}, master now of the house he inherited, raises again the banner of his own: the house of ${R.name} lives once more.`, 'hist', { major: true });
+  }
+  function checkRestorations() {
+    for (const F of Object.values(S.factions)) {
+      if (!F.alive) continue;
+      const orig = FOUNDERS[F.ruler];
+      if (orig && orig !== F.id && S.factions[orig] && !S.factions[orig].alive) restoreHouse(F.id, orig);
+    }
+  }
+
   function endTurn() {
     S.notices = [];
+    checkRestorations();
     // resolve any captives the player left unhandled: release them
     for (const c of [...S.pendingCaptives]) if (c.captor === S.player) resolveCaptive(c.name, 'release');
     // proposals the player ignored are declined; decisions left unanswered take the last option

@@ -229,6 +229,17 @@ world the game has produced.
 - **Seven times captured.** When Meng Huo's house falls and he is in the
   conqueror's hands, the conqueror may pardon him and restore him as a
   tributary king of the Nanman, bound by a fifty-year alliance.
+- **The quieter houses.** When Liu Biao dies the **Cai faction** try to
+  enthrone the boy Liu Cong; the rightful heir may withdraw to Jiangxia as a
+  lord of his own. A giant on Jing's border brings the **surrender of Jing**
+  decision. Yuan Shu's empire ends in **honey and famine**, his generals
+  taking to the hills, and his **remnant** carries the family gold to the
+  Yangtze power. Liu Zhang faces **Zhao Wei's revolt** of the Dongzhou troops
+  and, with an army at his gates, the choice to **open Chengdu** or watch Fa
+  Zheng and Meng Da defect. Shi Xie buys peace with **tribute of the south**;
+  his heir may raise **Shi Hui's revolt** against the overlord. And any house
+  whose seat passes to a **young lord** finds its neighbours bolder and its
+  officers restless for a year.
 - **The world at large.** A frontier general of low loyalty declares for
   himself and founds a house. A succession with a rival heir away from the seat
   may split a large realm in two. A great plague empties cities and kills
@@ -587,6 +598,15 @@ era run uninterrupted.
 | `js/ui.js` | Map rendering, panels, dialogs |
 | `tools/sim.js` | Headless multi-year simulation for balance testing |
 | `tools/battlesim.js` | Attack win-rate versus strength ratio |
+
+## A founder reclaims his house
+
+If the founding lord of a fallen house, Cao Cao say, is taken into another
+house and later comes to rule it, whether by succession, by a regent's coup or
+by raising a new banner, that house becomes his own again. It takes back his
+house's colour, name, persona and identity, so the events written for Cao Cao
+fire for it once more and the map flips to blue. The old dead house is gone for
+good; treaties, captives, guests and war aims all carry over.
 
 ## Exile has limits
 
