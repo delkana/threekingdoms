@@ -99,7 +99,9 @@ const TERRAIN = (() => {
         </pattern>
         <filter id="coastGlow" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="5"/></filter>
         <clipPath id="landClip"><path d="${LAND_PATH}"/></clipPath>
+        <clipPath id="canvasClip"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>
       </defs>
+      <g clip-path="url(#canvasClip)">
       <rect x="0" y="0" width="${W}" height="${H}" fill="url(#seaGrad)"/>
       <rect x="0" y="0" width="${W}" height="${H}" fill="url(#waves)"/>
       <path d="${LAND_PATH}" fill="none" stroke="#8fc3dc" stroke-width="12" opacity="0.28" filter="url(#coastGlow)"/>
@@ -112,7 +114,8 @@ const TERRAIN = (() => {
       <g class="rivers">${GEO.rivers.filter((r) => !r.lake).map(river).join('')}${GEO.lakes.map((l) => `<path d="${polyPath(l.pts)}" class="lake"/>`).join('')}</g>
       <path d="${LAND_PATH}" class="coast"/>
       <polyline points="${pts(WALL)}" class="wall"/>
-      <g class="geo-labels">${LABELS.map(([t, lon, lat, rot, size]) => { const [x, y] = P(lon, lat); return `<text x="${f1(x)}" y="${f1(y)}" transform="rotate(${rot} ${f1(x)} ${f1(y)})" style="font-size:${size}px">${t}</text>`; }).join('')}</g>`;
+      <g class="geo-labels">${LABELS.map(([t, lon, lat, rot, size]) => { const [x, y] = P(lon, lat); return `<text x="${f1(x)}" y="${f1(y)}" transform="rotate(${rot} ${f1(x)} ${f1(y)})" style="font-size:${size}px">${t}</text>`; }).join('')}</g>
+      </g>`;
   }
 
   return { svg, W, H, isSea, smoothPath };
