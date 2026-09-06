@@ -195,6 +195,42 @@ player's house is asked, the AI chooses by weighted odds.
 - **Treasures**: Sun Jian finds the Imperial Seal in a well in the ruins of
   Luoyang in 191, and hands it to Yuan Shu if the Sun sail for Jiangdong.
 
+### The later age
+
+The first twenty years are thick with scripted history; from about 215 the
+events are written against roles rather than names, so they fire in whatever
+world the game has produced.
+
+- **The Han abdicates.** The house that holds the Emperor with a King's title
+  and sixteen cities is offered the throne (Cao Cao himself refuses while he
+  lives). Accepting founds a dynasty: the house takes a dynastic name (Wei,
+  Han, Wu, Zhong, Liang, Yan and so on) that survives its successions, gains
+  prestige, and loses the goodwill of every other lord and a Han loyalist or
+  two. Every rival house of King's rank may then **proclaim its own emperor**.
+- **The white-robed crossing.** If the Liu and Sun houses are allied and Liu
+  Bei's house holds Jiangling with Guan Yu in Jing, the Sun house is offered
+  Lü Meng's stratagem: break the alliance, take Jiangling by stealth, and Guan
+  Yu dies on the road to Linju. Zhang Fei may then be murdered by his own men,
+  and Liu Bei chooses between **Yiling**, marching east with the whole strength
+  of Shu at the risk of Lu Xun's fire, and swallowing his grief.
+- **The northern expeditions.** A kingdom holding Hanzhong and Chengdu against
+  a northern power more than half again its size, with a strategist of INT 90
+  or better, is asked leave to march. The expedition brings Jieting (a rash
+  commander loses the water and his head), wooden oxen that fill the granaries,
+  and, when the strategist dies, the star falling at Wuzhang and the end of the
+  age of expeditions.
+- **The regent.** A weak or child ruler with a dominant minister invites the
+  Gaoping Tombs: strip the regent of office and he may raise his own banner, or
+  trust him and risk the seat passing to his family without a battle.
+- **Seven times captured.** When Meng Huo's house falls and he is in the
+  conqueror's hands, the conqueror may pardon him and restore him as a
+  tributary king of the Nanman, bound by a fifty-year alliance.
+- **The world at large.** A frontier general of low loyalty declares for
+  himself and founds a house. A succession with a rival heir away from the seat
+  may split a large realm in two. A great plague empties cities and kills
+  officers every generation or so. The Qiang, Di, Shanyue, Yi and Li rise in
+  thinly held frontier cities and throw out their governors.
+
 ## New blood
 
 Officers die, so the realm is replenished in two ways. Some 140 historical

@@ -4,10 +4,24 @@
 //  Each event has a date window and a `when` test that returns a context
 //  object (or null) when the situation on the map allows it to fire. Plain
 //  events then run `apply`; decision events offer options, which the player
-//  chooses in a popup and the AI picks by weight. Everything fires once.
+//  chooses in a popup and the AI picks by weight. Events fire once unless
+//  marked `repeat` (then at most once a year). Late-game events are written
+//  against roles (the Emperor's holder, the kingdom behind the passes, the
+//  power on the Yangtze) so they still happen in an ahistoric world.
 //
 //  `E` is the helper API exposed by the engine (see game.js: eventApi).
 // ============================================================
+
+// ---- helpers for the later age ----
+const DYNASTY = { caocao: 'Wei', liubei: 'Han', sunjian: 'Wu', yuanshao: 'Zhao', yuanshu: 'Zhong', liuzhang: 'Shu', liubiao: 'Chu', mateng: 'Liang', gongsundu: 'Yan', gongsunzan: 'Ji', dongzhuo: 'Qin', lubu: 'Jin', zhanglu: 'Hanning', liuyao: 'Yue', taoqian: 'Xu' };
+const dynastyName = (S, fid) => DYNASTY[fid] || `${S.factions[fid].ruler.split(' ')[0]} dynasty`;
+const flags = (S) => (S.flags = S.flags || {});
+const bigHouses = (E, S, min) => Object.values(S.factions).filter((f) => f.alive && !f.raider && !f.guest && E.factionProvinces(f.id).length >= min);
+const REBEL_COLORS = ['#a52a2a', '#6b4c9a', '#2f6f6f', '#8a7a2a', '#9c4f96', '#4f7942', '#b5651d', '#5f6f9f'];
+const slug = (name) => name.toLowerCase().replace(/[^a-z]+/g, '');
+const seatOf = (E, fid) => E.rulerOf(fid).city;
+// the house's city facing `other` with the most troops
+const frontCity = (E, S, fid, other) => E.factionProvinces(fid).filter((p) => S.adj[p.id].some((n) => S.provinces[n].owner === other)).sort((a, b) => b.troops - a.troops)[0] || null;
 
 const EVENTS = [
   // ---------------------------------------------------------- Liu Bei
@@ -611,6 +625,308 @@ const EVENTS = [
       E.prestige(ctx.north, 15); E.prestige('sunjian', -15);
       S.factions.sunjian.lastLoss = S.turn;
       return `${E.fname(ctx.north)}\u2019s fleet, better found than the Sun expected, forces the crossing at ${E.pname(ctx.front)}. The wind never turns, the fire ships are cut off, and the Sun army on the far bank is broken. Jiangdong trembles.`;
+    },
+  },
+  // ---------------------------------------------------------- the later age: dynasties
+  {
+    id: 'han-abdication', title: 'The Han abdicates', repeat: true,
+    from: [210, 1], to: [280, 12],
+    when: (E, S) => {
+      if (S.hanEnded) return null;
+      const H = Object.values(S.factions).find((f) => f.alive && f.hasEmperor && !f.raider);
+      if (!H || (H.title || 0) < 3 || E.factionProvinces(H.id).length < 16) return null;
+      if (H.ruler === 'Cao Cao' && S.year < 219) return null;   // he would not, while he lived
+      if ((flags(S).abdicationDeclined || 0) > S.turn) return null;
+      return { fid: H.id };
+    },
+    decision: {
+      prompt: (E, S, ctx) => `The ministers petition the Emperor to yield the throne to ${E.rulerOf(ctx.fid).name}, whose house has protected the court and holds half the land. Omens are reported; memorials arrive daily. The Han has reigned four hundred years.`,
+      options: [
+        { label: 'Accept the abdication and found a dynasty', ai: 0.7, apply: (E, S, ctx) => {
+          const F = S.factions[ctx.fid]; const name = dynastyName(S, ctx.fid);
+          F.title = 4; F.dynasty = name; F.name = name; F.prestige = Math.min(100, (F.prestige || 0) + 25);
+          S.hanEnded = { turn: S.turn, by: ctx.fid, dynasty: name };
+          for (const f of Object.values(S.factions)) if (f.alive && f.id !== ctx.fid) E.shiftRelation(ctx.fid, f.id, -25);
+          const gone = E.factionOfficers(ctx.fid).filter((o) => o.name !== F.ruler && o.loyalty < 55 && o.pol >= 70).slice(0, 2);
+          for (const o of gone) { o.faction = null; o.loyalty = 0; }
+          return `The last Emperor of the Han yields the seals of state. ${E.rulerOf(ctx.fid).name} ascends the altar at ${E.pname(seatOf(E, ctx.fid))} and proclaims the dynasty of ${name}. The other lords call him a usurper${gone.length ? `, and ${gone.map((o) => o.name).join(' and ')} resign their offices rather than serve` : ''}.`;
+        } },
+        { label: 'Refuse: remain the protector of the Han', ai: 0.3, apply: (E, S, ctx) => { E.prestige(ctx.fid, 10); flags(S).abdicationDeclined = S.turn + 60; return `${E.rulerOf(ctx.fid).name} refuses the throne three times and sends the petitioners away. The scholars of the realm praise a loyalty rarer than victories.`; } },
+      ],
+    },
+  },
+  {
+    id: 'rival-emperor', title: 'A rival emperor', repeat: true,
+    from: [210, 1], to: [280, 12],
+    when: (E, S) => {
+      if (!S.hanEnded) return null;
+      const cand = bigHouses(E, S, 8).filter((f) => f.id !== S.hanEnded.by && (f.title || 0) === 3 && ((flags(S).rivalDeclined || {})[f.id] || 0) <= S.turn)
+        .sort((a, b) => E.factionProvinces(b.id).length - E.factionProvinces(a.id).length)[0];
+      return cand ? { fid: cand.id } : null;
+    },
+    decision: {
+      prompt: (E, S, ctx) => `${S.hanEnded.dynasty} has deposed the Han. Your officers urge you to answer usurpation with a throne of your own: proclaim yourself Emperor, so that the land knows where legitimacy lies.`,
+      options: [
+        { label: 'Proclaim yourself Emperor', ai: 0.7, apply: (E, S, ctx) => {
+          const F = S.factions[ctx.fid]; const name = dynastyName(S, ctx.fid);
+          F.title = 4; F.dynasty = name; F.name = name; E.prestige(ctx.fid, 15);
+          for (const f of Object.values(S.factions)) if (f.alive && f.id !== ctx.fid) E.shiftRelation(ctx.fid, f.id, f.id === S.hanEnded.by ? -40 : -15);
+          return `${E.rulerOf(ctx.fid).name} ascends the throne at ${E.pname(seatOf(E, ctx.fid))} as Emperor of ${name}. Two suns now hang in the sky, and every lord must choose which to bow to.`;
+        } },
+        { label: 'Decline the title', ai: 0.3, apply: (E, S, ctx) => { E.prestige(ctx.fid, 5); (flags(S).rivalDeclined = flags(S).rivalDeclined || {})[ctx.fid] = S.turn + 48; return `${E.rulerOf(ctx.fid).name} declines: "One usurper is enough for the age."`; } },
+      ],
+    },
+  },
+  // ---------------------------------------------------------- the fall of Guan Yu and Yiling
+  {
+    id: 'guan-yu-falls', title: 'The white-robed crossing',
+    from: [215, 1], to: [260, 12],
+    when: (E, S) => {
+      const lb = S.factions.liubei, su = S.factions.sunjian;
+      if (!lb || !lb.alive || !su || !su.alive || lb.guest || su.guest) return null;
+      if (E.treatyStatus('liubei', 'sunjian') !== 'alliance' || S.provinces.jiangling.owner !== 'liubei') return null;
+      const gy = S.officers['Guan Yu']; if (!gy || gy.faction !== 'liubei' || gy.captive) return null;
+      const from = frontCity(E, S, 'sunjian', 'liubei'); if (!from || !S.adj.jiangling.includes(from.id)) return null;
+      if (Math.random() > 0.12) return null;
+      return { fid: 'sunjian', from: from.id };
+    },
+    decision: {
+      house: 'sunjian',
+      prompt: (E, S, ctx) => `Guan Yu holds Jiangling for Liu Bei and treats the Sun house with open contempt. L\u00fc Meng proposes to hide soldiers in merchant boats and take the city by surprise while the alliance still stands. It would break your word before all the land.`,
+      options: [
+        { label: 'Cross in white robes and seize Jiangling', ai: 0.65, apply: (E, S, ctx) => {
+          E.breakTreaty('sunjian', 'liubei');
+          const taken = E.officersIn('jiangling', 'liubei').map((o) => o.name);
+          E.transferCity('jiangling', 'sunjian');
+          const gy = S.officers['Guan Yu'];
+          const cut = gy && (gy.city === 'jiangling' || S.adj.jiangling.includes(gy.city));
+          for (const n of taken) if (n !== 'Guan Yu') E.capture(n, 'sunjian');
+          let tail = '';
+          if (cut) { E.kill('Guan Yu', 'beheaded at Linju after refusing to bow to Sun Quan'); tail = ' Guan Yu, cut off with his army melting away, is taken on the road to Linju and beheaded when he refuses to bow.'; }
+          E.prestige('sunjian', 10); E.prestige('liubei', -10); E.shiftRelation('liubei', 'sunjian', -60);
+          flags(S).guanyuFall = S.turn;
+          return `L\u00fc Meng\u2019s soldiers, dressed as merchants, slip up the river from ${E.pname(ctx.from)} and take Jiangling without a fight.${tail}`;
+        } },
+        { label: 'Keep faith with the alliance', ai: 0.35, apply: (E, S) => { E.prestige('sunjian', 8); return 'Sun Quan sends L\u00fc Meng away. "We swore an oath at Red Cliffs." The alliance holds, for now.'; } },
+      ],
+    },
+  },
+  {
+    id: 'zhang-fei-murdered', minor: true, title: 'Zhang Fei murdered',
+    from: [215, 1], to: [260, 12],
+    when: (E, S) => { const f = flags(S); const zf = S.officers['Zhang Fei']; return f.guanyuFall && S.turn - f.guanyuFall <= 24 && zf && zf.faction === 'liubei' && !zf.captive && Math.random() < 0.15 ? {} : null; },
+    apply: (E, S) => { E.kill('Zhang Fei', 'murdered in his sleep by two of his own officers, who fled with his head to Wu'); E.shiftRelation('liubei', 'sunjian', -30); return 'Drunk with grief for his brother and cruel to his men, Zhang Fei is murdered in his tent. The killers flee downriver to Sun Quan.'; },
+  },
+  {
+    id: 'yiling', title: 'Yiling',
+    from: [215, 1], to: [260, 12],
+    when: (E, S) => {
+      const f = flags(S); if (!f.guanyuFall || f.yiling || S.turn - f.guanyuFall < 3 || S.turn - f.guanyuFall > 30) return null;
+      const lb = S.factions.liubei, su = S.factions.sunjian; if (!lb || !lb.alive || !su || !su.alive || lb.guest) return null;
+      const front = frontCity(E, S, 'liubei', 'sunjian'); if (!front) return null;
+      return { fid: 'liubei', front: front.id };
+    },
+    decision: {
+      house: 'liubei',
+      prompt: (E, S, ctx) => `Guan Yu is dead and Jiangling lost. Every general begs Liu Bei to march east and avenge his brother; Zhao Yun alone warns that the enemy of the Han is in the north, not on the Yangtze.`,
+      options: [
+        { label: 'March east and avenge Guan Yu', ai: 0.6, apply: (E, S, ctx) => { const p = S.provinces[ctx.front]; p.troops += 25000; p.training = Math.max(p.training, 70); p.food += 60000; E.warTarget('liubei', 'sunjian', 30); E.prestige('liubei', 5); flags(S).yiling = 'war'; flags(S).yilingTurn = S.turn; return `Liu Bei gathers the whole strength of Shu at ${E.pname(ctx.front)} and swears to drink the blood of the Sun. The river road to Wu fills with his camps.`; } },
+        { label: 'Swallow the grief and make peace', ai: 0.4, apply: (E, S) => { E.ceasefire('liubei', 'sunjian', 36); E.prestige('liubei', -5); flags(S).yiling = 'peace'; return 'Liu Bei weeps for three days and then sends envoys to Wu. The alliance is dead, but the war is not fought.'; } },
+      ],
+    },
+  },
+  {
+    id: 'yiling-fire', title: 'Fire along the river',
+    from: [215, 1], to: [260, 12],
+    when: (E, S) => {
+      const f = flags(S); if (f.yiling !== 'war' || f.yilingFired || S.turn - f.yilingTurn < 6 || S.turn - f.yilingTurn > 24) return null;
+      const lb = S.factions.liubei, su = S.factions.sunjian; if (!lb || !lb.alive || !su || !su.alive || !E.canAttack('liubei', 'sunjian')) return null;
+      const front = frontCity(E, S, 'liubei', 'sunjian'); if (!front || front.troops < 15000 || Math.random() > 0.2) return null;
+      return { front: front.id };
+    },
+    apply: (E, S, ctx) => { const p = S.provinces[ctx.front]; const lost = Math.floor(p.troops * 0.45); p.troops -= lost; E.prestige('liubei', -15); S.factions.liubei.lastLoss = S.turn; flags(S).yilingFired = S.turn; return `The Shu camps stretch for miles along the river at ${E.pname(ctx.front)}, strung out in the summer heat. Lu Xun waits, then fires them all in one night. ${lost.toLocaleString()} men are lost and the army flees west.`; },
+  },
+  // ---------------------------------------------------------- the northern expeditions
+  {
+    id: 'northern-memorial', title: 'The memorial on the expedition', repeat: true,
+    from: [218, 1], to: [280, 12],
+    when: (E, S) => {
+      const f = flags(S); if (f.expedition && S.factions[f.expedition.fid] && S.factions[f.expedition.fid].alive) return null;
+      if ((f.expeditionDeclined || 0) > S.turn) return null;
+      const W = S.provinces.hanzhong.owner; if (!W || S.provinces.chengdu.owner !== W || !S.factions[W].alive) return null;
+      const N = S.provinces.changan.owner || S.provinces.tianshui.owner; if (!N || N === W || !S.factions[N].alive || !E.canAttack(W, N)) return null;
+      if (E.factionProvinces(N).length < E.factionProvinces(W).length * 1.6) return null;
+      const strat = E.factionOfficers(W).filter((o) => o.name !== S.factions[W].ruler && o.int >= 90).sort((a, b) => b.int - a.int)[0];
+      if (!strat || Math.random() > 0.2) return null;
+      return { fid: W, n: N, strategist: strat.name };
+    },
+    decision: {
+      prompt: (E, S, ctx) => `${ctx.strategist} presents a memorial: "The realm is divided and ${E.fname(ctx.n)} holds the north with thrice our strength. If we do not attack, we shall surely be destroyed; if we attack, we may yet restore the Han." He asks leave to march from Hanzhong against ${E.pname(S.provinces.changan.owner === ctx.n ? 'changan' : 'tianshui')}.`,
+      options: [
+        { label: 'Launch the northern expedition', ai: 0.7, apply: (E, S, ctx) => { const p = S.provinces.hanzhong; p.troops += 15000; p.training = Math.max(p.training, 75); p.food += 40000; E.warTarget(ctx.fid, ctx.n, 36); E.prestige(ctx.fid, 5); flags(S).expedition = { turn: S.turn, fid: ctx.fid, n: ctx.n, strategist: ctx.strategist }; return `${ctx.strategist} leads the army out of Hanzhong. The banners of ${E.fname(ctx.fid)} fill the Qinling valleys, and the north stirs uneasily.`; } },
+        { label: 'Guard the passes and build strength', ai: 0.3, apply: (E, S, ctx) => { for (const p of E.factionProvinces(ctx.fid)) p.order = Math.min(100, p.order + 8); S.provinces.hanzhong.defense = Math.min(999, S.provinces.hanzhong.defense + 100); flags(S).expeditionDeclined = S.turn + 60; return `${E.rulerOf(ctx.fid).name} thanks ${ctx.strategist} and bids him wait. The walls of Hanzhong rise higher and the granaries fill.`; } },
+      ],
+    },
+  },
+  {
+    id: 'jieting', minor: true, title: 'Jieting', repeat: true,
+    from: [218, 1], to: [280, 12],
+    when: (E, S) => {
+      const x = flags(S).expedition; if (!x || S.turn - x.turn > 36 || !S.factions[x.fid] || !S.factions[x.fid].alive || !S.factions[x.n] || !S.factions[x.n].alive) return null;
+      const front = frontCity(E, S, x.fid, x.n); if (!front || front.troops < 8000 || Math.random() > 0.12) return null;
+      return { fid: x.fid, front: front.id, strategist: x.strategist };
+    },
+    apply: (E, S, ctx) => {
+      const p = S.provinces[ctx.front]; const lost = Math.floor(p.troops * 0.3); p.troops -= lost; E.prestige(ctx.fid, -5);
+      const rash = E.officersIn(ctx.front, ctx.fid).filter((o) => o.name !== ctx.strategist && o.name !== S.factions[ctx.fid].ruler && o.int < 70).sort((a, b) => b.war - a.war)[0];
+      if (rash) { E.killQuiet(rash.name, `executed by his own lord for abandoning the water at Jieting`); return `${rash.name}, disdaining the water, camps on the hilltop at Jieting and is surrounded; ${lost.toLocaleString()} men are lost and the advance collapses. ${ctx.strategist} has him executed with tears in his eyes.`; }
+      return `A commander camps carelessly on the hilltop at Jieting and is cut off from water; ${lost.toLocaleString()} men are lost and the advance falls back to ${E.pname(ctx.front)}.`;
+    },
+  },
+  {
+    id: 'wooden-oxen', minor: true, title: 'Wooden oxen and gliding horses', repeat: true,
+    from: [218, 1], to: [280, 12],
+    when: (E, S) => { const x = flags(S).expedition; return x && S.turn - x.turn <= 60 && S.factions[x.fid] && S.factions[x.fid].alive && S.officers[x.strategist] && S.provinces.hanzhong.owner === x.fid && Math.random() < 0.1 ? { fid: x.fid, strategist: x.strategist } : null; },
+    apply: (E, S, ctx) => { S.provinces.hanzhong.food += 40000; S.provinces.hanzhong.training = Math.min(100, S.provinces.hanzhong.training + 5); return `${ctx.strategist} devises wooden oxen and gliding horses to carry grain over the mountain roads. The granaries of Hanzhong fill and the army drills through the winter.`; },
+  },
+  {
+    id: 'fallen-star', title: 'A star falls at Wuzhang',
+    from: [218, 1], to: [280, 12],
+    when: (E, S) => { const x = flags(S).expedition; return x && !flags(S).starFell && !S.officers[x.strategist] && S.factions[x.fid] && S.factions[x.fid].alive ? { fid: x.fid, strategist: x.strategist } : null; },
+    apply: (E, S, ctx) => { for (const p of E.factionProvinces(ctx.fid)) p.order = Math.max(0, p.order - 10); E.prestige(ctx.fid, -10); const F = S.factions[ctx.fid]; F.warTarget = null; F.caution = Math.max(F.caution || 1, 1.4); flags(S).starFell = S.turn; return `A great star falls red over the camp at Wuzhang. ${ctx.strategist} is dead, and the army of ${E.fname(ctx.fid)} turns for home in silence. "A dead ${ctx.strategist.split(' ')[0]} frightens off the living," the northerners jeer, but the age of expeditions is over.`; },
+  },
+  // ---------------------------------------------------------- the regent's coup
+  {
+    id: 'regent-coup', title: 'The regent', repeat: true,
+    from: [215, 1], to: [280, 12],
+    when: (E, S) => {
+      for (const H of bigHouses(E, S, 6)) {
+        if (((flags(S).coupChecked || {})[H.id] || 0) > S.turn) continue;
+        const R = E.rulerOf(H.id); if (!R) continue;
+        const weak = E.age(R) <= 16 || R.ldr + R.war + R.int + R.pol + R.chr < 250;
+        if (!weak) continue;
+        const M = E.factionOfficers(H.id).filter((o) => o.name !== R.name && o.int >= 85 && o.pol >= 80 && E.age(o) >= 38 && E.age(o) <= 72 && o.loyalty <= 85).sort((a, b) => b.int + b.pol - a.int - a.pol)[0];
+        if (!M || Math.random() > 0.06) continue;
+        return { fid: H.id, m: M.name, r: R.name };
+      }
+      return null;
+    },
+    decision: {
+      prompt: (E, S, ctx) => `${ctx.m} governs the realm in all but name while ${ctx.r} sits the seat. His clients fill the offices and his brothers hold the gates. Some whisper that he means to take the state; others that without him it would fall.`,
+      options: [
+        { label: 'Strip him of office', ai: 0.4, apply: (E, S, ctx) => {
+          const M = S.officers[ctx.m]; (flags(S).coupChecked = flags(S).coupChecked || {})[ctx.fid] = S.turn + 60;
+          if (M.city !== seatOf(E, ctx.fid) && Math.random() < 0.5) {
+            E.foundHouse({ id: `rebel-${slug(ctx.m)}-${S.turn}`, name: ctx.m, ruler: ctx.m, color: REBEL_COLORS[S.turn % REBEL_COLORS.length], cities: [M.city], aggr: 1.2, persona: ['schemer'] });
+            return `${ctx.m}, stripped of his seals, refuses to come to court. From ${E.pname(M.city)} he raises troops in his own name, and the realm has two masters.`;
+          }
+          M.faction = null; M.loyalty = 0; return `${ctx.m} is stripped of his offices and retires to his estates. The court breathes again, though its ablest hand is gone.`;
+        } },
+        { label: 'Trust him with the state', ai: 0.6, apply: (E, S, ctx) => {
+          const F = S.factions[ctx.fid]; const M = S.officers[ctx.m]; (flags(S).coupChecked = flags(S).coupChecked || {})[ctx.fid] = S.turn + 60;
+          if (Math.random() < 0.45) {
+            const old = S.officers[ctx.r]; const houseName = E.fname(ctx.fid);
+            F.ruler = ctx.m; F.name = F.dynasty || ctx.m; M.loyalty = 100; M.city = seatOf(E, ctx.fid) === M.city ? M.city : M.city;
+            if (old) { old.loyalty = 30; }
+            for (const o of E.factionOfficers(ctx.fid)) if (o.name !== ctx.m) o.loyalty = Math.max(0, o.loyalty - 10);
+            E.prestige(ctx.fid, -10);
+            for (const f of Object.values(S.factions)) if (f.alive && f.id !== ctx.fid) E.shiftRelation(ctx.fid, f.id, -10);
+            return `${ctx.m} seizes the gates and the arsenal while ${ctx.r} is at the tombs. The seat of ${houseName} passes to the house of ${ctx.m.split(' ')[0]} without a battle; ${ctx.r} is kept in silk and silence.`;
+          }
+          M.loyalty = 100; for (const p of E.factionProvinces(ctx.fid)) p.order = Math.min(100, p.order + 5);
+          return `${ctx.m} kneels and swears before the ancestral tablets. He governs faithfully, and the realm prospers under his hand.`;
+        } },
+      ],
+    },
+  },
+  // ---------------------------------------------------------- the Nanman
+  {
+    id: 'meng-huo-submits', title: 'Seven times captured, seven times released',
+    from: [190, 1], to: [280, 12],
+    when: (E, S) => {
+      const mh = S.factions.menghuo, o = S.officers['Meng Huo'];
+      if (!mh || mh.alive || !o || flags(S).nanman) return null;
+      const X = S.provinces.jianning.owner; if (!X || !S.factions[X].alive || S.factions[X].raider) return null;
+      if (!(o.faction === X || o.captive === X || (!o.faction && o.city === 'jianning'))) return null;
+      return { fid: X };
+    },
+    decision: {
+      prompt: (E, S, ctx) => `Meng Huo, king of the Nanman, is in your hands, and Jianning lies under your banners. Seven times he has been taken and seven times he has sworn to fight again. The hill tribes will never be held by garrisons alone.`,
+      options: [
+        { label: 'Pardon him and make him king under your suzerainty', ai: 0.6, apply: (E, S, ctx) => {
+          const o = S.officers['Meng Huo']; o.captive = null; o.faction = null; S.pendingCaptives = S.pendingCaptives.filter((c) => c.name !== 'Meng Huo');
+          const kin = ['Zhu Rong', 'Meng You'].filter((n) => S.officers[n] && !S.officers[n].captive && (!S.officers[n].faction || S.officers[n].faction === ctx.fid));
+          E.foundHouse({ id: 'menghuo', name: 'Meng Huo', ruler: 'Meng Huo', color: '#7b1fa2', cities: ['jianning'], officers: kin, aggr: 0.2, persona: ['cautious'] });
+          E.setRelation(ctx.fid, 'menghuo', 80); E.ally(ctx.fid, 'menghuo', 600); E.gold(ctx.fid, 3000); E.prestige(ctx.fid, 15);
+          flags(S).nanman = S.turn;
+          return `Meng Huo weeps: "The southern people will never rebel again." He returns to Jianning as king of the Nanman under ${E.fname(ctx.fid)}, and the tribute of the hills comes north each year.`;
+        } },
+        { label: 'Keep the land and garrison it', ai: 0.4, apply: (E, S, ctx) => { const o = S.officers['Meng Huo']; if (o && !o.faction) { o.faction = ctx.fid; o.loyalty = 40; o.captive = null; S.pendingCaptives = S.pendingCaptives.filter((c) => c.name !== 'Meng Huo'); } S.provinces.jianning.order = Math.max(0, S.provinces.jianning.order - 20); flags(S).nanman = S.turn; return `${E.fname(ctx.fid)} keeps Jianning under its own governors. The hills grumble and the garrison sleeps badly.`; } },
+      ],
+    },
+  },
+  // ---------------------------------------------------------- the world at large
+  {
+    id: 'frontier-revolt', title: 'A general declares for himself', repeat: true,
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => {
+      for (const H of bigHouses(E, S, 7)) {
+        const seat = seatOf(E, H.id);
+        for (const p of E.factionProvinces(H.id)) {
+          if (p.id === seat || S.adj[seat].includes(p.id)) continue;
+          if (!S.adj[p.id].some((n) => S.provinces[n].owner !== H.id)) continue;
+          const G = E.officersIn(p.id, H.id).filter((o) => o.name !== H.ruler && o.war >= 75 && o.loyalty < 45).sort((a, b) => b.war - a.war)[0];
+          if (G && Math.random() < 0.05) return { fid: H.id, g: G.name, city: p.id };
+        }
+      }
+      return null;
+    },
+    apply: (E, S, ctx) => { E.foundHouse({ id: `rebel-${slug(ctx.g)}-${S.turn}`, name: ctx.g, ruler: ctx.g, color: REBEL_COLORS[(S.turn * 7) % REBEL_COLORS.length], cities: [ctx.city], aggr: 1.3, persona: ['reckless'] }); return `${ctx.g}, long unpaid and unhonoured, raises his own banner over ${E.pname(ctx.city)} and declares that he serves ${E.fname(ctx.fid)} no longer.`; },
+  },
+  {
+    id: 'brothers-war', title: 'The brothers\u2019 war', repeat: true,
+    from: [192, 1], to: [280, 12],
+    when: (E, S) => {
+      for (const H of bigHouses(E, S, 8)) {
+        const ls = H.lastSuccession; if (!ls || !ls.rival || S.turn - ls.turn > 6 || (flags(S).splitChecked || {})[H.id] === ls.turn) continue;
+        (flags(S).splitChecked = flags(S).splitChecked || {})[H.id] = ls.turn;
+        const R = S.officers[ls.rival]; const seat = seatOf(E, H.id);
+        if (!R || R.faction !== H.id || R.captive || R.city === seat || S.provinces[R.city].owner !== H.id) continue;
+        if (Math.random() > 0.35) continue;
+        const own = E.factionProvinces(H.id).map((p) => p.id);
+        const cities = [R.city, ...S.adj[R.city].filter((n) => own.includes(n) && n !== seat)].slice(0, Math.max(1, Math.floor(own.length / 3)));
+        return { fid: H.id, r: R.name, cities, heir: H.ruler };
+      }
+      return null;
+    },
+    apply: (E, S, ctx) => { E.foundHouse({ id: `split-${slug(ctx.r)}-${S.turn}`, name: ctx.r, ruler: ctx.r, color: REBEL_COLORS[(S.turn * 3) % REBEL_COLORS.length], cities: ctx.cities, aggr: 1.1, persona: ['reckless'] }); return `${ctx.r} refuses to bow to ${ctx.heir}. The officers of ${ctx.cities.map((c) => E.pname(c)).join(', ')} declare for him, and the house that ruled them is split in two.`; },
+  },
+  {
+    id: 'great-plague', title: 'The great plague', repeat: true,
+    from: [195, 1], to: [280, 12],
+    when: (E, S) => (Math.random() < 0.004 ? {} : null),
+    apply: (E, S) => {
+      for (const p of Object.values(S.provinces)) { p.pop = Math.floor(p.pop * 0.92); p.order = Math.max(0, (p.order || 50) - 4); }
+      const dead = E.officers().filter((o) => Math.random() < (E.age(o) > 55 ? 0.06 : 0.015)).slice(0, 12);
+      const notable = [...dead].sort((a, b) => (b.ldr + b.war + b.int + b.pol) - (a.ldr + a.war + a.int + a.pol)).slice(0, 4).map((o) => o.name);
+      for (const o of dead) E.killQuiet(o.name, 'of the plague');
+      return `Pestilence sweeps the land from the Yellow River to the Yangtze. Villages stand empty and the markets fall silent.${notable.length ? ` Among the dead are ${notable.join(', ')}.` : ''}`;
+    },
+  },
+  {
+    id: 'tribes-rise', title: 'The tribes rise', repeat: true,
+    from: [190, 1], to: [280, 12],
+    when: (E, S) => {
+      const cands = ['longxi', 'xiliang', 'wudu', 'danyang', 'jianan', 'zangke', 'hepu'].map((c) => S.provinces[c]).filter((p) => p.owner && S.factions[p.owner].alive && !S.factions[p.owner].raider && p.troops < 4000 && p.order < 55);
+      if (!cands.length || Math.random() > 0.04) return null;
+      const p = cands[Math.floor(Math.random() * cands.length)];
+      return { city: p.id, fid: p.owner };
+    },
+    apply: (E, S, ctx) => {
+      const tribe = { longxi: 'the Qiang', xiliang: 'the Qiang', wudu: 'the Di', danyang: 'the Shanyue', jianan: 'the Shanyue', zangke: 'the Yi of the hills', hepu: 'the Li of the coast' }[ctx.city];
+      const seat = seatOf(E, ctx.fid); for (const o of E.officersIn(ctx.city, ctx.fid)) o.city = seat;
+      E.transferCity(ctx.city, null); const p = S.provinces[ctx.city]; p.troops = 9000; p.order = 40;
+      return `With the garrison of ${E.pname(ctx.city)} thin and its people restless, ${tribe} rise and drive out the officials of ${E.fname(ctx.fid)}. The city answers to no lord.`;
     },
   },
 ];

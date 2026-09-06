@@ -751,7 +751,7 @@ const Game = (() => {
       }
       if (exile && escapees.length && goGuest(defF, R.to, attF, R.startD * 0.2, to.gold * 0.2)) {
         const F = S.factions[defF];
-        if (!escapees.some(isRuler)) { const heir = escapees.reduce((m, o) => (heirScore(defF, o) > heirScore(defF, m) ? o : m)); F.ruler = heir.name; F.name = heir.name; heir.loyalty = 100; L(`With his lord taken, ${heir.name} leads the remnant of the house.`, 'head'); }
+        if (!escapees.some(isRuler)) { const heir = escapees.reduce((m, o) => (heirScore(defF, o) > heirScore(defF, m) ? o : m)); F.ruler = heir.name; F.name = F.dynasty || heir.name; heir.loyalty = 100; L(`With his lord taken, ${heir.name} leads the remnant of the house.`, 'head'); }
         to.gold = Math.floor(to.gold * 0.8);
         L(`${escapees.map((o) => o.name).join(', ')} escape with ${fmt(Math.floor(R.startD * 0.2))} loyal soldiers to ${pname(rulerOf(F.host).city)} and shelter as guests of ${fname(F.host)}.`, 'head');
         S.notices.push({ text: `${fname(defF)} has lost his last city and lives in exile under ${fname(F.host)}.`, cls: 'hist', major: true });
@@ -1251,7 +1251,8 @@ const Game = (() => {
     }
     const heir = cands[0];
     F.lastLoss = S.turn;
-    F.ruler = heir.name; F.name = heir.name; heir.loyalty = 100;
+    F.ruler = heir.name; F.name = F.dynasty || heir.name; heir.loyalty = 100;
+    F.lastSuccession = { turn: S.turn, rival: cands[1] ? cands[1].name : null };
     for (const o of factionOfficers(fid)) if (o.name !== heir.name) o.loyalty = clamp(o.loyalty - ri(5, 15), 0, 100);
     notice(`${deathText} ${heir.name} succeeds as lord of the house.`, 'hist', { major: true });
     if (fid === S.player && cands.length > 1) S.pendingSuccession = { fid, candidates: cands.map((c) => c.name) };
@@ -1262,7 +1263,8 @@ const Game = (() => {
     if (!o || o.faction !== fid || o.captive) return fail(`${name} cannot take the seat.`);
     const old = off(F.ruler);
     if (old && old.name !== name) old.loyalty = 90;
-    F.ruler = name; F.name = name; o.loyalty = 100;
+    F.ruler = name; F.name = F.dynasty || name; o.loyalty = 100;
+    F.lastSuccession = { turn: S.turn, rival: (S.pendingSuccession && S.pendingSuccession.candidates || []).find((n) => n !== name) || null };
     S.pendingSuccession = null;
     return ok(`${name} takes the seat of the house.`, 'hist');
   }
@@ -1300,8 +1302,12 @@ const Game = (() => {
   let _eventApi = null;
   const api = () => _eventApi || (_eventApi = {
     prov, off, fname, pname, rulerOf, relation, shiftRelation, factionOfficers, factionProvinces, bordering, treatyStatus,
-    transferCity, wake, dissolveHouse,
+    transferCity, wake, dissolveHouse, breakTreaty, age, heirCandidates, totalTroops, canAttack, setRelation, officersIn, governorOf,
+    officers: () => allOfficers().filter((o) => !o.captive),
     ceasefire: (a, b, months) => { const d = dip(a, b); d.status = 'ceasefire'; d.until = S.turn + months; },
+    ally: (a, b, months) => { const d = dip(a, b); d.status = 'alliance'; d.until = S.turn + months; },
+    setTitle: (fid, tier) => { const F = S.factions[fid]; if (F) F.title = tier; },
+    killQuiet: (name, cause) => { const o = off(name); if (o) killOfficer(o, cause, false); },
     prestige: (fid, n) => { const F = S.factions[fid]; if (F) F.prestige = clamp((F.prestige || 0) + n, 0, 100); },
     gold: (fid, n) => { const p = factionProvinces(fid)[0]; if (p) p.gold += n; },
     food: (fid, n) => { const p = factionProvinces(fid)[0]; if (p) p.food += n; },
