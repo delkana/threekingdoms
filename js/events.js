@@ -621,7 +621,7 @@ const OBJECTIVES = [
     reward: (E, S) => { E.troops('liubei', 8000); E.prestige('liubei', 10); return '8,000 veterans of Xu rally to Liu Bei, and his name is spoken with respect.'; } },
   { id: 'lb-jing-north', house: 'liubei', title: 'Guardian of the Han River', desc: 'Hold Xinye and Jiangxia.', from: 200, to: 215, hold: ['xinye', 'jiangxia'],
     reward: (E, S) => { E.gold('liubei', 3000); E.prestige('liubei', 10); return 'The scholars of Jing Province flock to Liu Bei, bringing gifts and counsel.'; } },
-  { id: 'lb-jing-south', house: 'liubei', title: 'The four commanderies', desc: 'Hold Jiangling, Changsha, Wuling and Guiyang.', from: 205, to: 225, hold: ['jiangling', 'changsha', 'wuling', 'guiyang'],
+  { id: 'lb-jing-south', house: 'liubei', title: 'The four commanderies', desc: 'Hold Jiangling, Changsha, Wuling, Guiyang and Lingling.', from: 205, to: 225, hold: ['jiangling', 'changsha', 'wuling', 'guiyang', 'lingling'],
     reward: (E, S) => { E.gold('liubei', 5000); E.food('liubei', 40000); E.prestige('liubei', 15); return 'Southern Jing yields its harvests and its taxes to Liu Bei.'; } },
   { id: 'lb-shu', house: 'liubei', title: 'Lord of Shu', desc: 'Hold Chengdu.', from: 208, to: 235, hold: ['chengdu'],
     reward: (E, S) => { E.prestige('liubei', 25); E.troops('liubei', 10000); return 'The Land of Abundance is his. Liu Bei is proclaimed King of Hanzhong by his officers.'; } },
@@ -667,14 +667,14 @@ const DESTINY = {
   liubei: [
     { from: 190, to: 196, targets: ['xiapi', 'xiaopei', 'beihai', 'langya'] },
     { from: 197, to: 207, targets: ['xinye', 'jiangxia', 'runan', 'xiangyang'] },
-    { from: 208, to: 214, targets: ['jiangling', 'changsha', 'wuling', 'guiyang', 'jiangxia'] },
+    { from: 208, to: 214, targets: ['jiangling', 'changsha', 'wuling', 'guiyang', 'lingling', 'jiangxia'] },
     { from: 211, to: 230, targets: ['yongan', 'jiangzhou', 'zitong', 'chengdu', 'hanzhong'] },
   ],
   sunjian: [
     { from: 190, to: 194, targets: ['jiangxia', 'lujiang', 'chaisang'] },
     { from: 194, to: 201, targets: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang'] },
     { from: 202, to: 208, targets: ['jiangxia', 'yuzhang', 'chaisang', 'lujiang', 'shouchun'] },
-    { from: 209, to: 235, targets: ['jiangling', 'changsha', 'guiyang', 'wuling', 'shouchun'] },
+    { from: 209, to: 235, targets: ['jiangling', 'changsha', 'guiyang', 'wuling', 'lingling', 'shouchun'] },
   ],
   lubu: [
     { from: 192, to: 195, targets: ['puyang', 'chenliu', 'hongnong', 'luoyang', 'xuchang'] },

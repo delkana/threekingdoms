@@ -28,11 +28,11 @@ const MAP = {
 const PROVINCES = [
   // North-west and the passes
   { id: 'xiliang',     name: 'Xiliang', lon: 102.63, lat: 37.93, tier: 2, traits: ['horses'] },
-  { id: 'tianshui',    name: 'Tianshui', lon: 105.72, lat: 34.58, tier: 2, traits: ['horses'] },
+  { id: 'tianshui',    name: 'Tianshui', lon: 105.72, lat: 34.58, dy: -10, tier: 2, traits: ['horses'] },
   { id: 'changan',     name: "Chang'an", lon: 108.94, lat: 34.27, tier: 3, traits: [] },
   { id: 'hongnong',    name: 'Hongnong', lon: 110.88, lat: 34.52, dy: 30, tier: 1, traits: [] },
   { id: 'luoyang',     name: 'Luoyang', lon: 112.45, lat: 34.65, dy: -10, tier: 3, traits: [] },
-  { id: 'hanzhong',    name: 'Hanzhong', lon: 107.02, lat: 33.07, tier: 2, traits: ['grain'] },
+  { id: 'hanzhong',    name: 'Hanzhong', lon: 107.02, lat: 33.07, dy: 8, tier: 2, traits: ['grain'] },
   { id: 'shangyong',   name: 'Shangyong', lon: 110.23, lat: 32.23, dx: -8, tier: 1, traits: [] },
   // Shu and the south-west
   { id: 'zitong',      name: 'Zitong', lon: 105.16, lat: 31.64, tier: 1, traits: ['grain'] },
@@ -42,7 +42,7 @@ const PROVINCES = [
   { id: 'jianning',    name: 'Jianning', lon: 103.80, lat: 25.50, tier: 1, traits: [] },
   // North and north-east
   { id: 'jinyang',     name: 'Jinyang', lon: 112.55, lat: 37.87, tier: 1, traits: ['horses'] },
-  { id: 'ye',          name: 'Ye', lon: 114.37, lat: 36.33, dx: -16, dy: -13, tier: 3, traits: [] },
+  { id: 'ye',          name: 'Ye', lon: 114.37, lat: 36.33, dx: -16, dy: -26, tier: 3, traits: [] },
   { id: 'zhongshan',   name: 'Zhongshan', lon: 114.99, lat: 38.51, dx: -16, tier: 1, traits: ['horses'] },
   { id: 'beiping',     name: 'Beiping', lon: 116.40, lat: 39.90, tier: 2, traits: ['horses'] },
   { id: 'xiangping',   name: 'Xiangping', lon: 123.17, lat: 41.27, tier: 1, traits: ['horses'] },
@@ -52,11 +52,11 @@ const PROVINCES = [
   { id: 'pingyuan',    name: 'Pingyuan', lon: 116.43, lat: 37.17, dy: 6, tier: 1, traits: ['river'] },
   { id: 'beihai',      name: 'Beihai', lon: 118.80, lat: 36.70, tier: 2, traits: ['salt', 'coast'] },
   // Central plain
-  { id: 'puyang',      name: 'Puyang', lon: 115.03, lat: 35.76, dx: 18, tier: 2, traits: ['river'] },
+  { id: 'puyang',      name: 'Puyang', lon: 115.03, lat: 35.76, dx: 18, dy: -12, tier: 2, traits: ['river'] },
   { id: 'chenliu',     name: 'Chenliu', lon: 114.30, lat: 34.80, tier: 2, traits: [] },
-  { id: 'xiaopei',     name: 'Xiaopei', lon: 116.94, lat: 34.72, dx: -6, tier: 1, traits: [] },
-  { id: 'langya',      name: 'Langya', lon: 118.35, lat: 35.05, dx: 13, tier: 1, traits: ['salt', 'coast'] },
-  { id: 'xiapi',       name: 'Xiapi', lon: 117.95, lat: 33.91, tier: 2, traits: [] },
+  { id: 'xiaopei',     name: 'Xiaopei', lon: 116.94, lat: 34.72, dx: -6, dy: -22, tier: 1, traits: [] },
+  { id: 'langya',      name: 'Langya', lon: 118.35, lat: 35.05, dx: 13, dy: -8, tier: 1, traits: ['salt', 'coast'] },
+  { id: 'xiapi',       name: 'Xiapi', lon: 117.95, lat: 33.91, dx: 20, dy: 24, tier: 2, traits: [] },
   { id: 'xuchang',     name: 'Xuchang', lon: 113.85, lat: 34.03, dy: 10, tier: 2, traits: [] },
   { id: 'wan',         name: 'Wan', lon: 112.53, lat: 33.00, dx: -16, tier: 2, traits: [] },
   { id: 'runan',       name: 'Runan', lon: 114.36, lat: 33.00, tier: 1, traits: [] },
@@ -79,6 +79,17 @@ const PROVINCES = [
   // The far south
   { id: 'nanhai',      name: 'Nanhai', lon: 113.25, lat: 23.13, tier: 2, traits: ['coast', 'salt'] },
   { id: 'jiaozhi',     name: 'Jiaozhi', lon: 105.85, lat: 21.03, dy: -24, tier: 1, traits: ['grain', 'coast'] },
+  // Added on the real map: the gaps in the old network
+  { id: 'longxi',     name: 'Longxi',     lon: 103.85, lat: 35.40, tier: 1, traits: ['horses'] },
+  { id: 'wudu',       name: 'Wudu',       lon: 105.70, lat: 33.75, tier: 1, traits: [] },
+  { id: 'hedong',     name: 'Hedong',     lon: 111.00, lat: 35.10, dy: -30, tier: 1, traits: ['salt'] },
+  { id: 'shangdang',  name: 'Shangdang',  lon: 113.10, lat: 36.20, dy: 24, tier: 1, traits: [] },
+  { id: 'pengcheng',  name: 'Pengcheng',  lon: 117.20, lat: 34.30, tier: 2, traits: [] },
+  { id: 'guangling',  name: 'Guangling',  lon: 119.40, lat: 32.40, dx: 40, dy: -40, tier: 1, traits: ['coast', 'salt'] },
+  { id: 'danyang',    name: 'Danyang',    lon: 118.75, lat: 30.95, tier: 1, traits: [] },
+  { id: 'lingling',   name: 'Lingling',   lon: 111.05, lat: 25.90, tier: 1, traits: ['grain'] },
+  { id: 'zangke',     name: 'Zangke',     lon: 106.70, lat: 26.60, tier: 1, traits: [] },
+  { id: 'hepu',       name: 'Hepu',       lon: 109.20, lat: 21.65, tier: 1, traits: ['coast', 'salt'] },
 ];
 for (const p of PROVINCES) { const [x, y] = MAP.project(p.lon, p.lat); p.x = Math.round(x + (p.dx || 0)); p.y = Math.round(y + (p.dy || 0)); }
 
@@ -94,89 +105,119 @@ const TRAIT_INFO = {
 // Roads: [from, to, type, waypoints]. Types: plain, pass (mountains; defenders +30%, northern passes close in winter),
 // river (a great-river crossing; fleets decide), sea (a coastal sea lane; fleets decide).
 const ROADS = [
+  // the north-west: Hexi corridor, Tao and Wei valleys, the Long mountains
+  ['xiliang', 'longxi', 'plain'],
   ['xiliang', 'tianshui', 'plain'],
-  ['xiliang', 'changan', 'plain'],
-  ['tianshui', 'changan', 'pass'],
-  ['tianshui', 'hanzhong', 'pass'],
-  ['tianshui', 'zitong', 'pass'],
-  ['changan', 'hanzhong', 'pass'],
-  ['changan', 'hongnong', 'pass'],
-  ['changan', 'jinyang', 'pass'],
+  ['xiliang', 'changan', 'plain'],          // the Anding road along the Jing valley
+  ['longxi', 'tianshui', 'pass'],
+  ['longxi', 'wudu', 'pass'],               // over the Min mountains
+  ['tianshui', 'changan', 'pass'],          // the Long pass into the Wei valley
+  ['tianshui', 'wudu', 'pass'],             // Qishan: the road of the northern campaigns
+  ['wudu', 'hanzhong', 'pass'],
+  ['wudu', 'zitong', 'pass'],               // Yinping: the mountain track Deng Ai took
+  ['changan', 'hanzhong', 'pass'],          // the Qinling trails
+  ['changan', 'hongnong', 'pass'],          // Tong pass
+  ['changan', 'hedong', 'river'],           // the Yellow River ford at Puban
   ['hongnong', 'luoyang', 'plain'],
-  ['hanzhong', 'zitong', 'pass'],
-  ['hanzhong', 'shangyong', 'pass'],
-  ['shangyong', 'wan', 'pass'],
-  ['shangyong', 'xiangyang', 'pass'],
-  ['zitong', 'chengdu', 'plain'],
-  ['chengdu', 'jiangzhou', 'plain'],
-  ['chengdu', 'jianning', 'pass'],
-  ['jiangzhou', 'jianning', 'pass'],
-  ['jiangzhou', 'wuling', 'pass'],
-  ['jiangzhou', 'yongan', 'pass'],
-  ['yongan', 'jiangling', 'pass'],
-  ['jianning', 'jiaozhi', 'pass'],
-  ['luoyang', 'jinyang', 'pass'],
+  ['hedong', 'hongnong', 'river'],
+  ['hedong', 'luoyang', 'river'],           // the Mengjin crossing
+  ['hedong', 'jinyang', 'plain'],           // up the Fen valley
+  ['hedong', 'shangdang', 'pass'],
+  // the north: Taihang, the Wall and the plain beyond
+  ['luoyang', 'shangdang', 'pass'],         // through Henei into the Taihang
   ['luoyang', 'ye', 'river'],
   ['luoyang', 'chenliu', 'plain'],
-  ['luoyang', 'wan', 'pass'],
-  ['jinyang', 'ye', 'pass'],
-  ['jinyang', 'beiping', 'pass'],
+  ['luoyang', 'wan', 'pass'],               // through the Funiu hills into the Nanyang basin
+  ['shangdang', 'jinyang', 'pass'],
+  ['shangdang', 'ye', 'pass'],              // the Hukou pass, gate of the Taihang
+  ['jinyang', 'zhongshan', 'pass'],         // Jingxing pass
+  ['jinyang', 'danhan', 'pass'],            // Yanmen
+  ['danhan', 'zhongshan', 'pass'],
+  ['danhan', 'beiping', 'pass'],            // Juyong pass
+  ['danhan', 'liucheng', 'plain'],          // the steppe road
   ['ye', 'zhongshan', 'plain'],
-  ['zhongshan', 'beiping', 'plain'],
-  ['zhongshan', 'nanpi', 'plain'],
   ['ye', 'nanpi', 'plain'],
   ['ye', 'pingyuan', 'river'],
   ['ye', 'puyang', 'river'],
+  ['zhongshan', 'beiping', 'plain'],
+  ['zhongshan', 'nanpi', 'plain'],
   ['beiping', 'nanpi', 'plain'],
-  ['beiping', 'xiangping', 'plain'],
   ['beiping', 'liucheng', 'plain'],
+  ['beiping', 'xiangping', 'plain'],        // the coastal corridor
   ['liucheng', 'xiangping', 'plain'],
-  ['danhan', 'jinyang', 'plain'],
-  ['danhan', 'zhongshan', 'pass'],
-  ['danhan', 'beiping', 'plain'],
-  ['danhan', 'liucheng', 'plain'],
   ['nanpi', 'pingyuan', 'plain'],
   ['pingyuan', 'puyang', 'plain'],
   ['pingyuan', 'beihai', 'plain'],
-  ['beihai', 'langya', 'pass'],
+  ['beihai', 'langya', 'pass'],             // round Mount Tai
+  // the central plain and Xu
   ['puyang', 'chenliu', 'plain'],
   ['puyang', 'xiaopei', 'plain'],
   ['chenliu', 'xuchang', 'plain'],
   ['chenliu', 'xiaopei', 'plain'],
-  ['xiaopei', 'xiapi', 'plain'],
-  ['xiaopei', 'langya', 'plain'],
-  ['xiaopei', 'runan', 'plain'],
+  ['xiaopei', 'pengcheng', 'plain'],
+  ['pengcheng', 'xiapi', 'plain'],
+  ['pengcheng', 'langya', 'plain'],
+  ['pengcheng', 'shouchun', 'plain'],       // down into the Huai basin
   ['langya', 'xiapi', 'plain'],
   ['xiapi', 'shouchun', 'plain'],
+  ['xiapi', 'guangling', 'plain'],          // along the Huai to the Yangtze mouth
   ['xuchang', 'wan', 'plain'],
   ['xuchang', 'runan', 'plain'],
   ['wan', 'runan', 'plain'],
   ['wan', 'xinye', 'plain'],
   ['runan', 'shouchun', 'plain'],
-  ['runan', 'jiangxia', 'plain'],
+  ['runan', 'jiangxia', 'pass'],            // the Wusheng pass through the Dabie hills
   ['shouchun', 'lujiang', 'plain'],
   ['shouchun', 'jianye', 'river'],
-  ['lujiang', 'jiangxia', 'plain'],
+  ['lujiang', 'jiangxia', 'pass'],          // the Dabie mountains
   ['lujiang', 'chaisang', 'river'],
   ['lujiang', 'jianye', 'river'],
-  ['xinye', 'xiangyang', 'river'],
+  // Jing: the Han and the middle Yangtze
+  ['shangyong', 'hanzhong', 'pass'],
+  ['shangyong', 'wan', 'pass'],
+  ['shangyong', 'xiangyang', 'pass'],
+  ['xinye', 'xiangyang', 'river'],          // the Han at Xiangyang
   ['xiangyang', 'jiangling', 'plain'],
   ['xiangyang', 'jiangxia', 'plain'],
   ['jiangling', 'wuling', 'river'],
   ['jiangling', 'changsha', 'river'],
   ['jiangling', 'jiangxia', 'plain'],
+  ['jiangling', 'yongan', 'river'],         // the Three Gorges
   ['jiangxia', 'chaisang', 'river'],
   ['jiangxia', 'changsha', 'river'],
   ['wuling', 'changsha', 'plain'],
-  ['changsha', 'yuzhang', 'pass'],
+  ['wuling', 'jiangzhou', 'pass'],          // the Wuling mountains
+  ['wuling', 'lingling', 'pass'],
+  ['changsha', 'lingling', 'plain'],        // up the Xiang
   ['changsha', 'guiyang', 'pass'],
+  ['changsha', 'yuzhang', 'pass'],
+  ['lingling', 'guiyang', 'plain'],
+  ['lingling', 'zangke', 'pass'],           // west through Guilin into the hills
+  ['lingling', 'nanhai', 'pass'],           // the Lingqu canal and the Xi river
   ['guiyang', 'yuzhang', 'pass'],
-  ['guiyang', 'nanhai', 'pass'],
+  ['guiyang', 'nanhai', 'pass'],            // the Meiling pass
+  // Jiangdong and the lower Yangtze
+  ['guangling', 'jianye', 'river'],
+  ['guangling', 'wu', 'river'],
+  ['jianye', 'danyang', 'plain'],
+  ['jianye', 'wu', 'plain'],                // both on the south bank
+  ['danyang', 'wu', 'plain'],
+  ['danyang', 'kuaiji', 'pass'],
+  ['danyang', 'yuzhang', 'pass'],           // through the Huizhou hills
+  ['wu', 'kuaiji', 'river'],                // the Qiantang crossing
   ['chaisang', 'yuzhang', 'plain'],
-  ['yuzhang', 'kuaiji', 'pass'],
-  ['jianye', 'wu', 'river'],
-  ['wu', 'kuaiji', 'plain'],
-  ['nanhai', 'jiaozhi', 'sea'],
+  // Shu, Nanzhong and the far south
+  ['hanzhong', 'zitong', 'pass'],           // the Jinniu road
+  ['zitong', 'chengdu', 'plain'],
+  ['chengdu', 'jiangzhou', 'plain'],
+  ['chengdu', 'jianning', 'pass'],
+  ['jiangzhou', 'jianning', 'pass'],
+  ['jiangzhou', 'yongan', 'river'],         // down the Yangtze
+  ['jiangzhou', 'zangke', 'pass'],
+  ['jianning', 'zangke', 'pass'],
+  ['jianning', 'jiaozhi', 'pass'],          // down the Red River
+  ['nanhai', 'hepu', 'sea'],
+  ['hepu', 'jiaozhi', 'sea'],               // the Gulf of Tonkin
 ];
 
 // Cities on the lower Yellow River, exposed to summer floods.
@@ -190,21 +231,21 @@ const FACTIONS = [
   { id: 'liubei',     name: 'Liu Bei',     ruler: 'Liu Bei',     color: '#3fa34d', aggr: 0.9, cities: ['pingyuan'],             wanderer: true, persona: ['honourable'], blurb: 'A humble but charismatic scion of the Han, sworn brother to Guan Yu and Zhang Fei.' },
   { id: 'sunjian',    name: 'Sun Jian',    ruler: 'Sun Jian',    color: '#d63b3b', aggr: 1.2, cities: ['changsha'],             wanderer: true, persona: ['reckless'], blurb: 'The Tiger of Jiangdong. Ferocious in battle, with a promising heir.' },
   { id: 'yuanshao',   name: 'Yuan Shao',   ruler: 'Yuan Shao',   color: '#f2e394', aggr: 1.0, cities: ['ye', 'nanpi'],          persona: ['cautious', 'builder'], blurb: 'Head of the most prestigious family in the empire. Wealthy and well-served.' },
-  { id: 'dongzhuo',   name: 'Dong Zhuo',   ruler: 'Dong Zhuo',   color: '#3a3a3a', aggr: 1.4, cities: ['luoyang', 'changan', 'hongnong'],   emperor: true, persona: ['treacherous'], blurb: 'The tyrant who holds the Emperor. Commands Lü Bu, the mightiest warrior alive.' },
+  { id: 'dongzhuo',   name: 'Dong Zhuo',   ruler: 'Dong Zhuo',   color: '#3a3a3a', aggr: 1.4, cities: ['luoyang', 'changan', 'hongnong', 'hedong'],   emperor: true, persona: ['treacherous'], blurb: 'The tyrant who holds the Emperor. Commands Lü Bu, the mightiest warrior alive.' },
   { id: 'yuanshu',    name: 'Yuan Shu',    ruler: 'Yuan Shu',     color: '#e67e22', aggr: 1.1, cities: ['wan', 'shouchun'],      persona: ['treacherous'], blurb: "Yuan Shao's arrogant half-brother. Rich lands, mediocre officers." },
   { id: 'liubiao',    name: 'Liu Biao',    ruler: 'Liu Biao',    color: '#16a085', aggr: 0.6, cities: ['xiangyang', 'jiangxia', 'jiangling', 'xinye'], persona: ['cautious', 'builder'], blurb: 'A cautious scholar-lord of Jing Province. Strong defenses, veteran generals.' },
   { id: 'liuzhang',   name: 'Liu Zhang',   ruler: 'Liu Zhang',   color: '#b8860b', aggr: 0.5, cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan'], persona: ['cautious'], blurb: 'Weak-willed ruler of the fertile, isolated lands of Shu.' },
-  { id: 'mateng',     name: 'Ma Teng',     ruler: 'Ma Teng',     color: '#8d5524', aggr: 1.1, cities: ['xiliang', 'tianshui'],              persona: ['reckless'], blurb: 'Lord of the frontier cavalry. His son Ma Chao is a rising terror.' },
+  { id: 'mateng',     name: 'Ma Teng',     ruler: 'Ma Teng',     color: '#8d5524', aggr: 1.1, cities: ['xiliang', 'tianshui', 'longxi'],           persona: ['reckless'], blurb: 'Lord of the frontier cavalry. His son Ma Chao is a rising terror.' },
   { id: 'gongsunzan', name: 'Gongsun Zan', ruler: 'Gongsun Zan', color: '#cfd8dc', aggr: 1.0, cities: ['beiping'],              persona: ['reckless'], blurb: 'Northern border general with the White Horse cavalry and young Zhao Yun.' },
-  { id: 'taoqian',    name: 'Tao Qian',    ruler: 'Tao Qian',    color: '#e991b8', aggr: 0.5, cities: ['xiapi', 'langya'],                persona: ['honourable', 'builder'], blurb: 'Elderly, benevolent governor of Xu. Rich but poorly defended.' },
+  { id: 'taoqian',    name: 'Tao Qian',    ruler: 'Tao Qian',    color: '#e991b8', aggr: 0.5, cities: ['xiapi', 'langya', 'pengcheng'],                persona: ['honourable', 'builder'], blurb: 'Elderly, benevolent governor of Xu. Rich but poorly defended.' },
   { id: 'kongrong',   name: 'Kong Rong',   ruler: 'Kong Rong',   color: '#5dade2', aggr: 0.4, cities: ['beihai'],               persona: ['honourable', 'builder'], blurb: 'A famous Confucian scholar. No general himself, but Taishi Ci serves him.' },
   { id: 'zhanglu',    name: 'Zhang Lu',    ruler: 'Zhang Lu',    color: '#7f8c5a', aggr: 0.5, cities: ['hanzhong'],             persona: ['builder'], blurb: 'Theocratic ruler of Hanzhong, leader of the Five Pecks of Rice sect.' },
   { id: 'liuyao',     name: 'Liu Yao',     ruler: 'Liu Yao',     color: '#f1948a', aggr: 0.6, cities: ['wu', 'jianye'],                   persona: ['cautious'], blurb: 'Imperial clansman holding the rich lands south of the Yangtze.' },
   { id: 'wanglang',   name: 'Wang Lang',   ruler: 'Wang Lang',   color: '#5b5ea6', aggr: 0.4, cities: ['kuaiji'],               persona: ['builder'], blurb: 'A learned administrator in the far southeast.' },
-  { id: 'shixie',     name: 'Shi Xie',     ruler: 'Shi Xie',     color: '#82c46c', aggr: 0.3, cities: ['jiaozhi', 'nanhai'],              persona: ['builder', 'cautious'], blurb: 'Isolated but stable lord of the deep south.' },
+  { id: 'shixie',     name: 'Shi Xie',     ruler: 'Shi Xie',     color: '#82c46c', aggr: 0.3, cities: ['jiaozhi', 'nanhai', 'hepu'],              persona: ['builder', 'cautious'], blurb: 'Isolated but stable lord of the deep south.' },
   { id: 'gongsundu',  name: 'Gongsun Du',  ruler: 'Gongsun Du',  color: '#9b7bb5', aggr: 0.5, cities: ['xiangping'],            persona: ['cautious'], blurb: 'Self-made warlord of distant Liaodong, beyond the reach of the court.' },
   { id: 'liudai',     name: 'Liu Dai',     ruler: 'Liu Dai',     color: '#c71585', aggr: 0.7, cities: ['puyang'],               persona: ['honourable'], blurb: 'Inspector of Yan Province and a coalition lord, holding the Yellow River crossings with few men of note.' },
-  { id: 'zhangyang',  name: 'Zhang Yang',  ruler: 'Zhang Yang',  color: '#00ced1', aggr: 0.8, cities: ['jinyang'],              persona: ['reckless'], blurb: 'A rough frontier soldier who made himself master of Bing Province after its governor was murdered.' },
+  { id: 'zhangyang',  name: 'Zhang Yang',  ruler: 'Zhang Yang',  color: '#00ced1', aggr: 0.8, cities: ['jinyang', 'shangdang'],              persona: ['reckless'], blurb: 'A rough frontier soldier who made himself master of Bing Province after its governor was murdered.' },
   { id: 'zhangyan',   name: 'Zhang Yan',   ruler: 'Zhang Yan',   color: '#5a1e1e', aggr: 1.5, cities: ['zhongshan'],            persona: ['treacherous', 'reckless'], blurb: 'Chief of the Black Mountain bandits of the Taihang. A vast, undisciplined host that raids rather than rules.' },
   { id: 'lukang',     name: 'Lu Kang',     ruler: 'Lu Kang',     color: '#f5deb3', aggr: 0.3, cities: ['lujiang'],              persona: ['honourable', 'cautious'], blurb: 'An aged Han loyalist administrator, stubborn behind the walls of Lujiang.' },
   { id: 'menghuo',    name: 'Meng Huo',    ruler: 'Meng Huo',    color: '#7b1fa2', aggr: 1.2, cities: ['jianning'],             persona: ['reckless'], blurb: 'King of the Nanman tribes of the south-west. Fierce warriors and war elephants, but no administrators.' },
@@ -283,7 +324,7 @@ const OFFICERS = [
   ['Ma Chao',      88, 96, 44, 30, 78, 'mateng', 'xiliang', 100, 176],
   ['Pang De',      85, 92, 58, 50, 60, 'mateng', 'xiliang', 88, 170],
   ['Ma Dai',       78, 80, 62, 55, 65, 'mateng', 'xiliang', 95, 178],
-  ['Han Sui',      76, 72, 68, 62, 55, 'mateng', 'tianshui', 60, 145],
+  ['Han Sui',      76, 72, 68, 62, 55, 'mateng', 'longxi', 60, 145],
   // Gongsun Zan
   ['Gongsun Zan',  82, 80, 50, 45, 70, 'gongsunzan', 'beiping', 100, 150],
   ['Zhao Yun',     92, 96, 78, 68, 85, 'gongsunzan', 'beiping', 70, 168],
@@ -770,21 +811,21 @@ const SCENARIOS = [
       caocao:    { ruler: 'Cao Cao', cities: ['chenliu', 'xuchang'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Dian Wei', 'Yu Jin', 'Man Chong', 'Guo Jia', 'Xun You', 'Cheng Yu*'] },
       lubu:      { ruler: 'L\u00fc Bu', name: 'L\u00fc Bu', color: '#b22222', wanderer: true, persona: ['treacherous', 'reckless'], aggr: 1.5, cities: ['puyang'], officers: ['L\u00fc Bu', 'Zhang Liao', 'Chen Gong', 'Hou Cheng*', 'Song Xian*', 'Wei Xu*', 'Diaochan*'] },
       liubei:    { ruler: 'Liu Bei', cities: ['xiaopei'], officers: ['Liu Bei', 'Guan Yu', 'Zhang Fei', 'Jian Yong', 'Sun Qian', 'Zhao Yun'] },
-      taoqian:   { ruler: 'Tao Qian', cities: ['xiapi', 'langya'], officers: ['Tao Qian', 'Cao Bao', 'Mi Zhu', 'Chen Deng', 'Zang Ba'] },
-      yuanshao:  { ruler: 'Yuan Shao', cities: ['ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang'], officers: ['Yuan Shao', 'Yan Liang', 'Wen Chou', 'Tian Feng', 'Ju Shou', 'Guo Tu', 'Zhang He', 'Gao Lan', 'Yuan Tan'] },
+      taoqian:   { ruler: 'Tao Qian', cities: ['xiapi', 'langya', 'pengcheng', 'guangling'], officers: ['Tao Qian', 'Cao Bao', 'Mi Zhu', 'Chen Deng', 'Zang Ba'] },
+      yuanshao:  { ruler: 'Yuan Shao', cities: ['ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'shangdang'], officers: ['Yuan Shao', 'Yan Liang', 'Wen Chou', 'Tian Feng', 'Ju Shou', 'Guo Tu', 'Zhang He', 'Gao Lan', 'Yuan Tan'] },
       gongsunzan: { ruler: 'Gongsun Zan', cities: ['beiping'], officers: ['Gongsun Zan', 'Yan Gang', 'Tian Yu'] },
       gongsundu: { ruler: 'Gongsun Du', cities: ['xiangping'], officers: ['Gongsun Du', 'Gongsun Kang'] },
       kongrong:  { ruler: 'Kong Rong', cities: ['beihai'], officers: ['Kong Rong', 'Taishi Ci', 'Wang Xiu'] },
-      dongzhuo:  { ruler: 'Li Jue', name: 'Li Jue', cities: ['changan', 'hongnong', 'luoyang'], officers: ['Li Jue', 'Guo Si', 'Fan Chou', 'Jia Xu', 'Zhong Yao'] },
-      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui'], officers: ['Ma Teng', 'Ma Chao', 'Pang De', 'Ma Dai', 'Han Sui'] },
+      dongzhuo:  { ruler: 'Li Jue', name: 'Li Jue', cities: ['changan', 'hongnong', 'luoyang', 'hedong'], officers: ['Li Jue', 'Guo Si', 'Fan Chou', 'Jia Xu', 'Zhong Yao'] },
+      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui', 'longxi'], officers: ['Ma Teng', 'Ma Chao', 'Pang De', 'Ma Dai', 'Han Sui'] },
       zhanglu:   { ruler: 'Zhang Lu', cities: ['hanzhong'], officers: ['Zhang Lu', 'Yang Ang', 'Yan Pu'] },
-      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
+      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'zangke'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
       yuanshu:   { ruler: 'Yuan Shu', cities: ['shouchun', 'runan', 'lujiang'], officers: ['Yuan Shu', 'Ji Ling', 'Zhang Xun', 'Yang Hong', 'Yan Xiang'] },
       sunjian:   { ruler: 'Sun Ce', name: 'Sun Ce', guestOf: 'yuanshu', officers: ['Sun Ce', 'Huang Gai', 'Cheng Pu', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin'] },
-      liubiao:   { ruler: 'Liu Biao', cities: ['xiangyang', 'jiangxia', 'jiangling', 'xinye', 'wan', 'changsha', 'wuling', 'guiyang'], officers: ['Liu Biao', 'Huang Zhong', 'Cai Mao', 'Kuai Liang', 'Kuai Yue', 'Wen Ping', 'Wei Yan', 'Zhang Xiu'] },
-      liuyao:    { ruler: 'Liu Yao', cities: ['wu', 'jianye', 'chaisang'], officers: ['Liu Yao', 'Zhang Ying', 'Fan Neng', 'Taishi Ci?'] },
+      liubiao:   { ruler: 'Liu Biao', cities: ['xiangyang', 'jiangxia', 'jiangling', 'xinye', 'wan', 'changsha', 'wuling', 'guiyang', 'lingling'], officers: ['Liu Biao', 'Huang Zhong', 'Cai Mao', 'Kuai Liang', 'Kuai Yue', 'Wen Ping', 'Wei Yan', 'Zhang Xiu'] },
+      liuyao:    { ruler: 'Liu Yao', cities: ['wu', 'jianye', 'chaisang', 'danyang'], officers: ['Liu Yao', 'Zhang Ying', 'Fan Neng', 'Taishi Ci?'] },
       wanglang:  { ruler: 'Wang Lang', cities: ['kuaiji'], officers: ['Wang Lang', 'Yu Fan', 'Zhou Xin', 'Hua Xin'] },
-      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai'], officers: ['Shi Xie', 'Shi Yi'] },
+      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai', 'hepu'], officers: ['Shi Xie', 'Shi Yi'] },
       menghuo:   { ruler: 'Meng Huo', cities: ['jianning'], officers: ['Meng Huo', 'Zhu Rong', 'Meng You'] },
       wuhuan:    { ruler: 'Tadun', cities: ['liucheng'], officers: ['Tadun', 'Louban', 'Supuyan'] },
       xianbei:   { ruler: 'Kebineng', cities: ['danhan'], officers: ['Kebineng', 'Budugen', 'Fuluohan'] },
@@ -795,16 +836,16 @@ const SCENARIOS = [
     intro: 'Cao Cao holds the Emperor at Xuchang and has crushed L\u00fc Bu and Yuan Shu. North of the Yellow River, Yuan Shao commands the greatest host in the land and marches south. Sun Quan, barely twenty, has just inherited Jiangdong; Liu Bei, driven from Xu once more, shelters with Yuan Shao.',
     emperor: 'caocao',
     houses: {
-      caocao:    { ruler: 'Cao Cao', title: 2, garrison: 0.8, training: 75, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Yu Jin', 'Man Chong', 'Guo Jia', 'Xun You', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang Xiu', 'Guan Yu'] },
-      yuanshao:  { ruler: 'Yuan Shao', title: 2, garrison: 1.4, cities: ['ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai'], officers: ['Yuan Shao', 'Yan Liang', 'Wen Chou', 'Tian Feng', 'Ju Shou', 'Guo Tu', 'Zhang He', 'Gao Lan', 'Yuan Tan', 'Yuan Shang', 'Tian Yu'] },
+      caocao:    { ruler: 'Cao Cao', title: 2, garrison: 0.8, training: 75, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'pengcheng', 'hedong', 'guangling'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Yu Jin', 'Man Chong', 'Guo Jia', 'Xun You', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang Xiu', 'Guan Yu'] },
+      yuanshao:  { ruler: 'Yuan Shao', title: 2, garrison: 1.4, cities: ['ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'shangdang'], officers: ['Yuan Shao', 'Yan Liang', 'Wen Chou', 'Tian Feng', 'Ju Shou', 'Guo Tu', 'Zhang He', 'Gao Lan', 'Yuan Tan', 'Yuan Shang', 'Tian Yu'] },
       liubei:    { ruler: 'Liu Bei', guestOf: 'yuanshao', officers: ['Liu Bei', 'Zhang Fei', 'Jian Yong', 'Sun Qian', 'Zhao Yun', 'Mi Zhu', 'Chen Dao'] },
-      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 1, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang'], officers: ['Sun Quan', 'Zhou Yu', 'Lu Su', 'Zhang Zhao', 'Huang Gai', 'Cheng Pu', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Chen Wu', 'Dong Xi', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'L\u00fc Meng*', 'Taishi Ci'] },
-      liubiao:   { ruler: 'Liu Biao', title: 1, cities: ['xiangyang', 'jiangxia', 'jiangling', 'xinye', 'changsha', 'wuling', 'guiyang'], officers: ['Liu Biao', 'Huang Zhong', 'Cai Mao', 'Kuai Liang', 'Kuai Yue', 'Wen Ping', 'Wei Yan', 'Liao Hua'] },
-      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
+      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 1, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'danyang'], officers: ['Sun Quan', 'Zhou Yu', 'Lu Su', 'Zhang Zhao', 'Huang Gai', 'Cheng Pu', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Chen Wu', 'Dong Xi', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'L\u00fc Meng*', 'Taishi Ci'] },
+      liubiao:   { ruler: 'Liu Biao', title: 1, cities: ['xiangyang', 'jiangxia', 'jiangling', 'xinye', 'changsha', 'wuling', 'guiyang', 'lingling'], officers: ['Liu Biao', 'Huang Zhong', 'Cai Mao', 'Kuai Liang', 'Kuai Yue', 'Wen Ping', 'Wei Yan', 'Liao Hua'] },
+      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'zangke'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
       zhanglu:   { ruler: 'Zhang Lu', cities: ['hanzhong'], officers: ['Zhang Lu', 'Yang Ang', 'Yan Pu'] },
-      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui', 'changan'], officers: ['Ma Teng', 'Ma Chao', 'Pang De', 'Ma Dai', 'Han Sui'] },
+      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui', 'changan', 'longxi', 'wudu'], officers: ['Ma Teng', 'Ma Chao', 'Pang De', 'Ma Dai', 'Han Sui'] },
       gongsundu: { ruler: 'Gongsun Du', cities: ['xiangping'], officers: ['Gongsun Du', 'Gongsun Kang'] },
-      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai'], officers: ['Shi Xie', 'Shi Yi'] },
+      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai', 'hepu'], officers: ['Shi Xie', 'Shi Yi'] },
       menghuo:   { ruler: 'Meng Huo', cities: ['jianning'], officers: ['Meng Huo', 'Zhu Rong', 'Meng You'] },
       zhangyan:  { ruler: 'Zhang Yan', cities: [], officers: [] },
       wuhuan:    { ruler: 'Tadun', cities: ['liucheng'], officers: ['Tadun', 'Louban', 'Supuyan'] },
@@ -817,16 +858,16 @@ const SCENARIOS = [
     intro: 'Cao Cao has crushed the Yuans, taken Hebei, and now sweeps south into a leaderless Jing Province. Liu Bei, with Zhuge Liang newly at his side, flees toward the river. Only Sun Quan\u2019s fleets stand between Cao Cao and the whole of China.',
     emperor: 'caocao',
     houses: {
-      caocao:    { ruler: 'Cao Cao', title: 2, garrison: 0.85, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Yu Jin', 'Man Chong', 'Xun You', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang He', 'Gao Lan', 'Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhang', 'Sima Yi', 'Jia Kui', 'Cai Mao', 'Kuai Yue', 'Wen Ping', 'Zhang Yang?'] },
+      caocao:    { ruler: 'Cao Cao', title: 2, garrison: 0.85, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan', 'pengcheng', 'hedong', 'shangdang', 'guangling'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Yu Jin', 'Man Chong', 'Xun You', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang He', 'Gao Lan', 'Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhang', 'Sima Yi', 'Jia Kui', 'Cai Mao', 'Kuai Yue', 'Wen Ping', 'Zhang Yang?'] },
       liubei:    { ruler: 'Liu Bei', title: 1, garrison: 1.5, fleet: 50, cities: ['jiangxia'], officers: ['Liu Bei', 'Guan Yu', 'Zhang Fei', 'Zhao Yun', 'Zhuge Liang', 'Jian Yong', 'Sun Qian', 'Mi Zhu', 'Chen Dao', 'Ma Liang', 'Guan Ping', 'Liu Feng', 'Huo Jun', 'Liao Hua'] },
-      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 2, fleet: 85, garrison: 1.2, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang'], officers: ['Sun Quan', 'Zhou Yu', 'Lu Su', 'Zhang Zhao', 'Huang Gai', 'Cheng Pu', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Chen Wu', 'Dong Xi', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Ling Tong', 'Gan Ning', 'L\u00fc Meng*', 'Taishi Ci?'] },
-      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
+      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 2, fleet: 85, garrison: 1.2, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'danyang'], officers: ['Sun Quan', 'Zhou Yu', 'Lu Su', 'Zhang Zhao', 'Huang Gai', 'Cheng Pu', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Chen Wu', 'Dong Xi', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Ling Tong', 'Gan Ning', 'L\u00fc Meng*', 'Taishi Ci?'] },
+      liuzhang:  { ruler: 'Liu Zhang', cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'zangke'], officers: ['Liu Zhang', 'Zhang Ren', 'Yan Yan', 'Huang Quan', 'Fa Zheng', 'Li Yan', 'Wu Yi', 'Zhao Wei', 'Zhang Song'] },
       zhanglu:   { ruler: 'Zhang Lu', cities: ['hanzhong', 'shangyong'], officers: ['Zhang Lu', 'Yang Ang', 'Yan Pu', 'Pang De'] },
-      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui'], officers: ['Ma Teng', 'Ma Chao', 'Ma Dai', 'Han Sui'] },
+      mateng:    { ruler: 'Ma Teng', cities: ['xiliang', 'tianshui', 'longxi', 'wudu'], officers: ['Ma Teng', 'Ma Chao', 'Ma Dai', 'Han Sui'] },
       gongsundu: { ruler: 'Gongsun Kang', name: 'Gongsun Kang', cities: ['xiangping'], officers: ['Gongsun Kang'] },
-      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai'], officers: ['Shi Xie', 'Shi Yi'] },
+      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai', 'hepu'], officers: ['Shi Xie', 'Shi Yi'] },
       menghuo:   { ruler: 'Meng Huo', cities: ['jianning'], officers: ['Meng Huo', 'Zhu Rong', 'Meng You'] },
-      liubiao:   { ruler: 'Liu Qi*', name: 'Liu Qi', cities: ['jiangling', 'changsha', 'wuling', 'guiyang'], officers: ['Liu Qi*', 'Huang Zhong', 'Kuai Liang', 'Wei Yan', 'Zhao Lei'] },
+      liubiao:   { ruler: 'Liu Qi*', name: 'Liu Qi', cities: ['jiangling', 'changsha', 'wuling', 'guiyang', 'lingling'], officers: ['Liu Qi*', 'Huang Zhong', 'Kuai Liang', 'Wei Yan', 'Zhao Lei'] },
       xianbei:   { ruler: 'Kebineng', cities: ['danhan'], officers: ['Kebineng', 'Budugen', 'Fuluohan'] },
     },
     treaties: [['liubei', 'sunjian', 'alliance']],
@@ -836,10 +877,10 @@ const SCENARIOS = [
     intro: 'Liu Bei has taken Shu and Hanzhong and been proclaimed King of Hanzhong; Guan Yu drives north from Jiangling toward Xuchang. Cao Cao, old and ill, holds the north. Sun Quan watches the Yangtze with L\u00fc Meng and Lu Xun, and his patience with his ally is wearing thin.',
     emperor: 'caocao',
     houses: {
-      caocao:    { ruler: 'Cao Cao', title: 3, garrison: 1.0, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan', 'tianshui', 'xiliang', 'liucheng', 'xiangping'], officers: ['Cao Cao', 'Cao Ren', 'Cao Hong', 'Yue Jin', 'Yu Jin', 'Man Chong', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang He', 'Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhang', 'Cao Zhi', 'Sima Yi', 'Jia Kui', 'Guo Huai', 'Hao Zhao', 'Xiahou Shang', 'Wang Shuang', 'Pang De', 'Wen Ping', 'Cai Mao', 'Kuai Yue', 'Han Sui'] },
-      liubei:    { ruler: 'Liu Bei', title: 3, garrison: 1.0, walls: 250, training: 75, cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'hanzhong', 'shangyong', 'jiangling', 'wuling', 'guiyang', 'changsha'], officers: ['Liu Bei', 'Guan Yu', 'Zhang Fei', 'Zhao Yun', 'Zhuge Liang', 'Ma Chao', 'Ma Dai', 'Huang Zhong', 'Wei Yan', 'Fa Zheng', 'Huang Quan', 'Li Yan', 'Wu Yi', 'Jian Yong', 'Sun Qian', 'Mi Zhu', 'Chen Dao', 'Ma Liang', 'Ma Su', 'Guan Ping', 'Liu Feng', 'Huo Jun', 'Liao Hua', 'Jiang Wan', 'Fei Yi', 'Wu Ban', 'Zhang Yi', 'Ma Zhong', 'Wang Ping', 'Zhang Ni', 'Guan Xing', 'Zhang Bao', 'Zhao Lei', 'Yan Yan'] },
-      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 2, garrison: 1.0, fleet: 85, walls: 100, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'jiangxia'], officers: ['Sun Quan', 'Lu Su', 'Zhang Zhao', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Ling Tong', 'Gan Ning', 'L\u00fc Meng*', 'Quan Cong', 'Ding Feng'] },
-      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai'], officers: ['Shi Xie', 'Shi Yi'] },
+      caocao:    { ruler: 'Cao Cao', title: 3, garrison: 1.0, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan', 'tianshui', 'xiliang', 'liucheng', 'xiangping', 'pengcheng', 'hedong', 'shangdang', 'guangling', 'longxi', 'wudu'], officers: ['Cao Cao', 'Cao Ren', 'Cao Hong', 'Yue Jin', 'Yu Jin', 'Man Chong', 'Jia Xu', 'Zhang Liao', 'Xu Huang', 'Xu Chu', 'Zang Ba', 'Chen Qun', 'Zhong Yao', 'Zhang He', 'Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhang', 'Cao Zhi', 'Sima Yi', 'Jia Kui', 'Guo Huai', 'Hao Zhao', 'Xiahou Shang', 'Wang Shuang', 'Pang De', 'Wen Ping', 'Cai Mao', 'Kuai Yue', 'Han Sui'] },
+      liubei:    { ruler: 'Liu Bei', title: 3, garrison: 1.0, walls: 250, training: 75, cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'hanzhong', 'shangyong', 'jiangling', 'wuling', 'guiyang', 'changsha', 'lingling', 'zangke'], officers: ['Liu Bei', 'Guan Yu', 'Zhang Fei', 'Zhao Yun', 'Zhuge Liang', 'Ma Chao', 'Ma Dai', 'Huang Zhong', 'Wei Yan', 'Fa Zheng', 'Huang Quan', 'Li Yan', 'Wu Yi', 'Jian Yong', 'Sun Qian', 'Mi Zhu', 'Chen Dao', 'Ma Liang', 'Ma Su', 'Guan Ping', 'Liu Feng', 'Huo Jun', 'Liao Hua', 'Jiang Wan', 'Fei Yi', 'Wu Ban', 'Zhang Yi', 'Ma Zhong', 'Wang Ping', 'Zhang Ni', 'Guan Xing', 'Zhang Bao', 'Zhao Lei', 'Yan Yan'] },
+      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 2, garrison: 1.0, fleet: 85, walls: 100, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'jiangxia', 'danyang'], officers: ['Sun Quan', 'Lu Su', 'Zhang Zhao', 'Han Dang', 'Zhu Zhi', 'Zhou Tai', 'Jiang Qin', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Ling Tong', 'Gan Ning', 'L\u00fc Meng*', 'Quan Cong', 'Ding Feng'] },
+      shixie:    { ruler: 'Shi Xie', cities: ['jiaozhi', 'nanhai', 'hepu'], officers: ['Shi Xie', 'Shi Yi'] },
       menghuo:   { ruler: 'Meng Huo', cities: ['jianning'], officers: ['Meng Huo', 'Zhu Rong', 'Meng You'] },
       xianbei:   { ruler: 'Kebineng', cities: ['danhan'], officers: ['Kebineng', 'Budugen', 'Fuluohan'] },
     },
@@ -850,9 +891,9 @@ const SCENARIOS = [
     intro: 'Cao Cao, Liu Bei and Guan Yu are dead. Cao Pi has deposed the last Han emperor and reigns as Emperor of Wei; Liu Shan sits on the throne of Shu with Zhuge Liang governing in his name; Sun Quan rules Wu from Jianye. Three kingdoms, one empire, and the war that will decide it.',
     emperor: null,
     houses: {
-      caocao:    { ruler: 'Cao Pi', name: 'Cao Pi', title: 4, garrison: 1.0, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan', 'tianshui', 'xiliang', 'liucheng', 'xiangping', 'shangyong'], officers: ['Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhi', 'Sima Yi', 'Zhang He', 'Xu Huang', 'Man Chong', 'Chen Qun', 'Jia Kui', 'Guo Huai', 'Hao Zhao', 'Xiahou Shang', 'Wang Shuang', 'Zang Ba', 'Wen Ping', 'Deng Ai', 'Zhu Ju?'] },
-      liubei:    { ruler: 'Liu Shan*', name: 'Liu Shan', title: 4, garrison: 1.1, walls: 300, training: 80, cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'hanzhong', 'jianning'], officers: ['Liu Shan*', 'Zhuge Liang', 'Zhao Yun', 'Wei Yan', 'Ma Dai', 'Li Yan', 'Wu Yi', 'Ma Su', 'Jiang Wan', 'Fei Yi', 'Wu Ban', 'Zhang Yi', 'Ma Zhong', 'Wang Ping', 'Zhang Ni', 'Guan Xing', 'Zhang Bao', 'Liao Hua', 'Jiang Wei', 'Zhang Yi (Shu)'] },
-      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 3, garrison: 1.0, fleet: 90, walls: 150, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'jiangxia', 'jiangling', 'wuling', 'guiyang', 'changsha', 'nanhai', 'jiaozhi'], officers: ['Sun Quan', 'Zhang Zhao', 'Han Dang', 'Zhou Tai', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Quan Cong', 'Ding Feng', 'Zhu Ju', 'Zhuge Ke'] },
+      caocao:    { ruler: 'Cao Pi', name: 'Cao Pi', title: 4, garrison: 1.0, cities: ['xuchang', 'chenliu', 'puyang', 'xiaopei', 'xiapi', 'langya', 'runan', 'luoyang', 'hongnong', 'wan', 'shouchun', 'ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'beiping', 'beihai', 'xinye', 'xiangyang', 'changan', 'tianshui', 'xiliang', 'liucheng', 'xiangping', 'shangyong', 'pengcheng', 'hedong', 'shangdang', 'guangling', 'longxi', 'wudu'], officers: ['Cao Pi', 'Cao Zhen', 'Cao Xiu', 'Cao Zhi', 'Sima Yi', 'Zhang He', 'Xu Huang', 'Man Chong', 'Chen Qun', 'Jia Kui', 'Guo Huai', 'Hao Zhao', 'Xiahou Shang', 'Wang Shuang', 'Zang Ba', 'Wen Ping', 'Deng Ai', 'Zhu Ju?'] },
+      liubei:    { ruler: 'Liu Shan*', name: 'Liu Shan', title: 4, garrison: 1.1, walls: 300, training: 80, cities: ['chengdu', 'jiangzhou', 'zitong', 'yongan', 'hanzhong', 'jianning', 'zangke'], officers: ['Liu Shan*', 'Zhuge Liang', 'Zhao Yun', 'Wei Yan', 'Ma Dai', 'Li Yan', 'Wu Yi', 'Ma Su', 'Jiang Wan', 'Fei Yi', 'Wu Ban', 'Zhang Yi', 'Ma Zhong', 'Wang Ping', 'Zhang Ni', 'Guan Xing', 'Zhang Bao', 'Liao Hua', 'Jiang Wei', 'Zhang Yi (Shu)'] },
+      sunjian:   { ruler: 'Sun Quan', name: 'Sun Quan', title: 3, garrison: 1.0, fleet: 90, walls: 150, cities: ['jianye', 'wu', 'kuaiji', 'chaisang', 'lujiang', 'yuzhang', 'jiangxia', 'jiangling', 'wuling', 'guiyang', 'changsha', 'nanhai', 'jiaozhi', 'danyang', 'lingling', 'hepu'], officers: ['Sun Quan', 'Zhang Zhao', 'Han Dang', 'Zhou Tai', 'Zhuge Jin', 'Bu Zhi', 'Gu Yong', 'Pan Zhang', 'Xu Sheng', 'Zhu Ran', 'Lu Xun', 'Zhu Huan', 'Quan Cong', 'Ding Feng', 'Zhu Ju', 'Zhuge Ke'] },
       menghuo:   { ruler: 'Meng Huo', cities: [], officers: ['Meng Huo', 'Zhu Rong', 'Meng You'], guestOf: null, dead: true },
       xianbei:   { ruler: 'Kebineng', cities: ['danhan'], officers: ['Kebineng', 'Budugen', 'Fuluohan'] },
     },
@@ -911,6 +952,16 @@ const BIOS = {
   'Deng Ai': 'A stammering clerk who became Wei\u2019s finest general and marched through the mountains to take Chengdu in 263.',
 };
 const CITY_NOTES = {
+  longxi: 'Didao on the Tao, the western marches where Han Sui and Ma Teng raised the Liang rebellion.',
+  wudu: 'The Bailong valley between Tianshui and Hanzhong, crossed by every northern campaign of Shu.',
+  hedong: 'Anyi on the salt lake of the Fen valley, Guan Yu\u2019s home country and the ford across the Yellow River.',
+  shangdang: 'The Taihang plateau above Ye, a fortress commandery that guards the passes into Hebei.',
+  pengcheng: 'Capital of Xu Province and Tao Qian\u2019s seat, sacked by Cao Cao in 193.',
+  guangling: 'The north bank of the Yangtze mouth, Chen Deng\u2019s seat and the bridgehead against Jiangdong.',
+  danyang: 'Hill country south of the river whose hard men filled the Sun family\u2019s armies.',
+  lingling: 'The fourth of the southern commanderies of Jing, on the upper Xiang beyond Changsha.',
+  zangke: 'The Nanzhong hills between Yi and the south, where the Zangke river runs toward the sea.',
+  hepu: 'The pearl coast on the Gulf of Tonkin, the sea road between Nanhai and Jiaozhi.',
   luoyang: 'The eastern capital of the Han, burned by Dong Zhuo in 190 and never the same again.',
   changan: 'The western capital, seat of the court after 190, wrecked by the feuds of Dong Zhuo\u2019s generals.',
   xuchang: 'Cao Cao\u2019s capital from 196, where the puppet Emperor lived out his reign.',
