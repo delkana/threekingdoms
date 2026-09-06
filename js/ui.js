@@ -20,6 +20,18 @@ const UI = (() => {
 
   // ---------- boot ----------
   let scenarioId = '190';
+  let far = false;          // semantic zoom: at the widest views city boxes show only their name
+  let seenEntry = null;     // newest chronicle entry the player has seen (for the ticker's unread count)
+  let showLegend = false;
+  try { showLegend = localStorage.getItem('rotk_legend') === '1'; } catch (e) { /* ignore */ }
+
+  function openDrawer() { $('#side').classList.add('open'); }
+  function closeDrawer() { $('#side').classList.remove('open'); }
+  function setLegend(on) { showLegend = on; $('#legend').hidden = !on; $('#toggle-legend').classList.toggle('on', on); try { localStorage.setItem('rotk_legend', on ? '1' : '0'); } catch (e) { /* ignore */ } }
+  function toggleChronicle(open) { const c = $('#chronicle'); c.hidden = open === undefined ? !c.hidden : !open; if (!c.hidden) seenEntry = Game.state().log[0] || null; renderLog(); }
+  function toggleCinema() { document.body.classList.toggle('cinema'); }
+  function toggleMore(open) { const m = $('#more-menu'); m.hidden = open === undefined ? !m.hidden : !open; }
+
   function init() {
     const sel = $('#scenario-select');
     sel.innerHTML = SCENARIOS.map((sc) => `<option value="${sc.id}">${sc.year} AD — ${esc(sc.title)}</option>`).join('');
@@ -54,14 +66,29 @@ const UI = (() => {
       else if (k === 's' || k === 'S') showStats();
       else if (k === 'l' || k === 'L') showWiki();
       else if (k === 'm' || k === 'M') showMenu();
+      else if (k === 'h' || k === 'H') toggleCinema();
       else if (k === '+' || k === '=') zoomAt(1.3, VB.x + VB.w / 2, VB.y + VB.h / 2);
       else if (k === '-' || k === '_') zoomAt(1 / 1.3, VB.x + VB.w / 2, VB.y + VB.h / 2);
       else if (k === 'Home' || k === '0') resetView();
       else if (k.startsWith('Arrow')) { const step = VB.w * 0.08; if (k === 'ArrowLeft') VB.x -= step; if (k === 'ArrowRight') VB.x += step; if (k === 'ArrowUp') VB.y -= step; if (k === 'ArrowDown') VB.y += step; clampView(); applyViewBox(); e.preventDefault(); }
-      else if (k === 'Tab') { e.preventDefault(); const S = Game.state(); if (S.observer) return; const mine = Game.factionProvinces(S.player).filter((p) => Game.idleOfficers(p.id).length); if (!mine.length) return; const i = mine.findIndex((p) => p.id === selected); selected = mine[(i + 1) % mine.length].id; renderMap(); renderPanel(); }
+      else if (k === 'Tab') { e.preventDefault(); cycleIdle(); }
     });
     $('#btn-auto').addEventListener('click', toggleAuto);
     initAutoSpeed();
+    // map-first chrome: the more-menu, the drawer, the chronicle ticker, the legend and the cinematic toggle
+    $('#btn-more').addEventListener('click', (e) => { e.stopPropagation(); toggleMore(); });
+    $('#more-menu').addEventListener('click', () => toggleMore(false));
+    document.addEventListener('click', (e) => { if (!e.target.closest('.tb-actions')) toggleMore(false); });
+    $('#btn-legend').addEventListener('click', () => setLegend(!showLegend));
+    $('#toggle-legend').addEventListener('click', () => setLegend(!showLegend));
+    $('#btn-cinema').addEventListener('click', toggleCinema);
+    $('#cinema-exit').addEventListener('click', toggleCinema);
+    $('#drawer-close').addEventListener('click', closeDrawer);
+    $('#drawer-handle').addEventListener('click', openDrawer);
+    $('#ticker').addEventListener('click', () => toggleChronicle());
+    $('#chron-close').addEventListener('click', () => toggleChronicle(false));
+    $('#tb-badges').addEventListener('click', (e) => { const b = e.target.closest('.badge.act'); if (b && b.dataset.act === 'idle') cycleIdle(); });
+    window.addEventListener('resize', () => { if ($('#game-screen').hidden) return; const r = $('#map').getBoundingClientRect(); if (!r.width || !r.height) return; VB.h = VB.w / (r.width / r.height); clampView(); applyViewBox(); });
     $('#btn-observe').addEventListener('click', () => startGame(null));
     initMapControls();
     initTooltip();
@@ -70,7 +97,7 @@ const UI = (() => {
       const g = e.target.closest('.prov');
       if (!g) return;
       selected = g.dataset.id;
-      renderMap(); renderPanel();
+      renderMap(); renderPanel(); openDrawer();
     });
     $('#modal-box').addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
@@ -81,7 +108,21 @@ const UI = (() => {
     });
     $('#modal-box').addEventListener('input', (e) => { if (modalHandlers.oninput) modalHandlers.oninput(e); });
     $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLocked) closeModal(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalLocked) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('#modal').hidden) { if (!modalLocked) closeModal(); return; }
+      if (!$('#more-menu').hidden) { toggleMore(false); return; }
+      if (!$('#chronicle').hidden) { toggleChronicle(false); return; }
+      if (document.body.classList.contains('cinema')) { toggleCinema(); return; }
+      if ($('#side').classList.contains('open')) closeDrawer();
+    });
+  }
+
+  function cycleIdle() {
+    const S = Game.state(); if (S.observer) return;
+    const mine = Game.factionProvinces(S.player).filter((p) => Game.idleOfficers(p.id).length); if (!mine.length) return;
+    const i = mine.findIndex((p) => p.id === selected); selected = mine[(i + 1) % mine.length].id;
+    renderMap(); renderPanel(); openDrawer();
   }
 
   function factionStrength(f) {
@@ -140,12 +181,17 @@ const UI = (() => {
     $('#start-screen').hidden = true;
     $('#game-screen').hidden = false;
     ensureMapBase();
+    document.body.classList.remove('cinema');
+    $('#chronicle').hidden = true; toggleMore(false);
+    seenEntry = Game.state().log[0] || null;
+    setLegend(showLegend);
     resetView();
     renderAll();
+    openDrawer();
   }
 
   function backToMenu() {
-    stopAuto();
+    stopAuto(); document.body.classList.remove('cinema');
     $('#game-screen').hidden = true;
     $('#start-screen').hidden = false;
     $('#btn-continue').hidden = !Game.hasSave();
@@ -157,9 +203,7 @@ const UI = (() => {
   function renderTop() {
     const S = Game.state();
     $('#tb-date').textContent = `${Game.dateStr()} · ${Game.season()}`;
-    $('#btn-auto').hidden = !S.observer;
-    $('#auto-speed').hidden = !S.observer;
-    $('#auto-pause-wrap').hidden = !S.observer;
+    $('#auto-ctl').hidden = !S.observer;
     $('#btn-endturn').textContent = S.observer ? 'Next Month ▶' : 'End Month ▶';
     if (S.observer) {
       const alive = Object.values(S.factions).filter((f) => f.alive);
@@ -169,7 +213,8 @@ const UI = (() => {
         ['Houses', alive.length], ['Free cities', all.filter((p) => !p.owner).length], ['Troops', fmt(all.reduce((s, p) => s + p.troops, 0))],
         ['Officers', Object.values(S.officers).filter((o) => o.faction && !o.captive).length],
         ['Treaties', Object.entries(S.diplomacy).filter(([k, d]) => d.status !== 'neutral' && k.split('|').every((f) => S.factions[f].alive)).length],
-      ].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
+      ].map(([k, v]) => `<div class="stat" title="${k}"><b data-k="${k.slice(0, 5)}">${v}</b><span>${k}</span></div>`).join('');
+      $('#tb-badges').innerHTML = '';
       return;
     }
     const f = Game.fac(S.player);
@@ -181,7 +226,16 @@ const UI = (() => {
       ['Cities', provs.length], ['Troops', fmt(sum('troops'))], ['Gold', fmt(sum('gold'))], ['Food', fmt(sum('food'))],
       ['Officers', Game.factionOfficers(S.player).length], ['Idle', f.guest ? Game.factionOfficers(S.player).filter((o) => !o.acted).length : idle], ['Prestige', f.prestige || 0],
       ...(f.guest ? [['Favour', f.favor], ['Household', fmt(f.household.troops)]] : []),
-    ].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
+    ].map(([k, v]) => `<div class="stat" title="${k}"><b data-k="${k.slice(0, 5)}">${v}</b><span>${k}</span></div>`).join('');
+    // things waiting on the player, always visible
+    const idleN = f.guest ? Game.factionOfficers(S.player).filter((o) => !o.acted).length : idle;
+    const caps = S.pendingCaptives.filter((c) => c.captor === S.player).length;
+    const props = (S.pendingProposals || []).length;
+    $('#tb-badges').innerHTML = [
+      idleN ? `<span class="badge act" data-act="idle" title="Officers who have not acted this month. Click or press Tab to cycle their cities.">⚑ ${idleN} idle</span>` : '',
+      caps ? `<span class="badge warn" title="Captives awaiting your judgement at the end of the month">⛓ ${caps} captive${caps > 1 ? 's' : ''}</span>` : '',
+      props ? `<span class="badge" title="Envoys waiting at your court; they are heard at the end of the month">✉ ${props} envoy${props > 1 ? 's' : ''}</span>` : '',
+    ].join('');
   }
 
   function isDark(hex) {
@@ -208,6 +262,7 @@ const UI = (() => {
     const pos = Object.fromEntries(PROVINCES.map((p) => [p.id, p]));
     let roads = '', glyphs = '';
     const GLYPH = { pass: '▲', river: '≋', sea: '≋' };
+    const ls = labelScale();
     for (const [a, b, type, via] of ROADS) {
       const hl = selected && (a === selected || b === selected);
       const mods = Game.battleModifiers(a, b);
@@ -220,7 +275,7 @@ const UI = (() => {
       const points = [[pos[a].x, pos[a].y], ...(via && via.length ? via : [mid]), [pos[b].x, pos[b].y]];
       roads += `<path class="road road-${type}${hl ? ' hl' : ''}${mods.blocked ? ' closed' : ''}" d="${TERRAIN.smoothPath(points)}"/>`;
       if (type !== 'plain') {
-        glyphs += `<text class="road-glyph g-${type}${mods.blocked ? ' closed' : ''}" x="${mid[0]}" y="${mid[1] + 4}" text-anchor="middle">${mods.blocked ? '❄' : GLYPH[type]}</text>`;
+        glyphs += `<g class="glyph" data-x="${mid[0]}" data-y="${mid[1]}" transform="translate(${mid[0]},${mid[1]}) scale(${ls})"><text class="road-glyph g-${type}${mods.blocked ? ' closed' : ''}" y="4" text-anchor="middle">${mods.blocked ? '❄' : GLYPH[type]}</text></g>`;
       }
     }
     roads += glyphs;
@@ -236,7 +291,12 @@ const UI = (() => {
       if (isDark(color)) cls.push('dark');
       const officers = p.owner ? Game.officersIn(P.id, p.owner).length : 0;
       const hasRuler = p.owner && Game.rulerOf(p.owner).city === P.id;
-      nodes += `<g class="${cls.join(' ')}" data-id="${P.id}" transform="translate(${P.x},${P.y})">
+      nodes += far
+        ? `<g class="${cls.join(' ')}" data-id="${P.id}" data-x="${P.x}" data-y="${P.y}" transform="translate(${P.x},${P.y}) scale(${ls})">
+        <rect x="-46" y="-13" width="92" height="26" rx="5" fill="${color}"/>
+        <text class="pn" text-anchor="middle" y="5">${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
+      </g>`
+        : `<g class="${cls.join(' ')}" data-id="${P.id}" data-x="${P.x}" data-y="${P.y}" transform="translate(${P.x},${P.y}) scale(${ls})">
         <rect x="-48" y="-21" width="96" height="42" rx="6" fill="${color}"/>
         <text class="pn" text-anchor="middle" y="-4">${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
         <text class="pt" text-anchor="middle" y="12">⚔ ${fmt(p.troops)}${officers ? `  ☗ ${officers}` : ''}</text>
@@ -332,7 +392,26 @@ const UI = (() => {
     svg.addEventListener('pointerdown', () => { tip.hidden = true; });
   }
 
-  function applyViewBox() { $('#map').setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`); }
+  // City boxes and road glyphs are drawn in map units, so they would grow with every zoom step. Past a
+  // comfortable on-screen size they are scaled back down, leaving open ground between cities instead.
+  const LABEL_CAP_PX = 125;
+  function labelScale() {
+    const r = $('#map').getBoundingClientRect();
+    if (!r.width || !r.height) return 1;
+    const pxPerUnit = Math.min(r.width / VB.w, r.height / VB.h);
+    return Math.min(1, LABEL_CAP_PX / (96 * pxPerUnit));
+  }
+  function applyLabelScale() {
+    const s = labelScale().toFixed(3);
+    for (const g of document.querySelectorAll('#dyn .prov, #dyn .glyph')) g.setAttribute('transform', `translate(${g.dataset.x},${g.dataset.y}) scale(${s})`);
+  }
+  function applyViewBox() {
+    $('#map').setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
+    const f = VB.w > TERRAIN.W * 0.8;
+    const dyn = document.getElementById('dyn');
+    if (f !== far) { far = f; if (dyn && dyn.innerHTML) renderMap(); }
+    else if (dyn && dyn.innerHTML) applyLabelScale();
+  }
   function clampView() {
     VB.x = Math.max(-VB.w * 0.6, Math.min(TERRAIN.W - VB.w * 0.4, VB.x));
     VB.y = Math.max(-VB.h * 0.6, Math.min(TERRAIN.H - VB.h * 0.4, VB.y));
@@ -344,7 +423,14 @@ const UI = (() => {
     VB.w = nw; VB.h = VB.h / f;
     clampView(); applyViewBox();
   }
-  function resetView() { VB.x = 0; VB.y = 0; VB.w = TERRAIN.W; VB.h = TERRAIN.H; applyViewBox(); }
+  // fill the map area (no letterboxing); a wide screen sees the heartland band and pans north or south
+  function resetView() {
+    const r = $('#map').getBoundingClientRect();
+    const ar = r.width && r.height ? r.width / r.height : TERRAIN.W / TERRAIN.H;
+    if (ar >= TERRAIN.W / TERRAIN.H) { VB.w = TERRAIN.W; VB.h = TERRAIN.W / ar; VB.x = 0; VB.y = Math.max(0, (TERRAIN.H - VB.h) * 0.42); }
+    else { VB.h = TERRAIN.H; VB.w = TERRAIN.H * ar; VB.y = 0; VB.x = Math.max(0, (TERRAIN.W - VB.w) * 0.55); }
+    applyViewBox();
+  }
   function svgPoint(clientX, clientY) {
     const svg = $('#map'); const pt = svg.createSVGPoint(); pt.x = clientX; pt.y = clientY;
     return pt.matrixTransform(svg.getScreenCTM().inverse());
@@ -621,7 +707,7 @@ const UI = (() => {
       .sort((a, b) => b.cities - a.cities || b.troops - a.troops);
     const me = !S.observer && S.factions[S.player];
     if (me && me.guest) return exileHtml();
-    return `<div class="ph"><h2>The Realm</h2><div class="owner">${esc(Game.dateStr())}</div></div>
+    return `<div class="ph"><h2>The Realm</h2></div>
       <div class="hint">Select a city on the map to inspect it.</div>
       <ul class="factlist">${rows.map((r) => `<li><span class="chip" style="background:${r.f.color}"></span><span class="fn ${r.f.alive ? '' : 'dead'}">${esc(r.f.name)}${r.f.id === S.player ? ' (you)' : ''}</span><small>${r.cities} cities · ${fmt(r.troops)} troops · ${r.offs} off.</small></li>`).join('')}</ul>`;
   }
@@ -629,6 +715,13 @@ const UI = (() => {
   function renderLog() {
     const S = Game.state();
     $('#log').innerHTML = S.log.slice(0, 120).map((l) => `<div class="log-line ${l.cls}"><span class="lt">${l.t}</span>${esc(l.text)}</div>`).join('');
+    const latest = S.log[0];
+    $('#ticker-time').textContent = latest ? latest.t : '';
+    $('#ticker-text').textContent = latest ? latest.text : '';
+    $('#ticker-text').className = latest ? `log-line ${latest.cls || ''}` : '';
+    const idx = seenEntry ? S.log.indexOf(seenEntry) : -1;
+    const unread = idx === -1 ? Math.min(S.log.length, 99) : idx;
+    $('#ticker-more').textContent = $('#chronicle').hidden ? `Chronicle ▴${unread ? ` · ${unread} new` : ''}` : 'Chronicle ▾';
   }
 
   function toast(msg) { Game.log(msg, 'sys'); renderLog(); }
@@ -1093,8 +1186,10 @@ const UI = (() => {
         <tr><td><kbd>S</kbd></td><td>Statistics</td><td><kbd>L</kbd></td><td>Lore (encyclopaedia)</td></tr>
         <tr><td><kbd>M</kbd></td><td>Menu (save, load, undo)</td><td><kbd>?</kbd></td><td>This help</td></tr>
         <tr><td><kbd>+</kbd> / <kbd>−</kbd></td><td>Zoom</td><td><kbd>Arrows</kbd>, <kbd>Home</kbd></td><td>Pan the map, refit</td></tr>
-        <tr><td><kbd>Esc</kbd></td><td>Close a dialog</td><td></td><td></td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close a dialog, the chronicle or the side panel</td><td><kbd>H</kbd></td><td>Hide or show the interface to watch the map</td></tr>
       </table>
+      <div class="sec">The screen</div>
+      <p class="hint">The map fills the screen: drag to pan, wheel or pinch to zoom; zoomed out, cities show only their names. Click a city to open its panel on the right; close it with × or Esc, and reopen it with the tab on the right edge. The strip at the bottom shows the latest chronicle entry; click it for the full record. The ≡ menu holds statistics, lore, help, the legend, save and the main menu.</p>
       <div class="sec">The month</div>
       <p class="hint">Every officer in a city acts once a month. Farm, Trade, Fortify and Train build the city; Conscript raises troops (needs order 30+); Search finds gold and hidden treasures; Pacify restores order; Appoint grants ranks; Plot works against a neighbour; Transfer moves men and goods; Attack sends up to three commanders with a stance and, for a clever commander, a stratagem. Set each city\'s defence posture in its panel. Diplomacy, Objectives, treasures and exile have their own screens. The README explains every rule.</p>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal });

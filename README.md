@@ -418,14 +418,35 @@ coldness toward the player's envoys.
 
 ## Screens and controls
 
+The map is the screen. A single top bar carries your house, the date and
+season, the vital figures (cities, troops, gold, food, officers, idle officers
+and prestige; for the observer, houses, free cities and treaties) and badges
+for anything waiting on you: idle officers (click to cycle their cities),
+captives and envoys. Beside them sit End Month, the auto-play controls in
+observer mode, the Realm, Officers, Diplomacy and Objectives tabs, and a ≡ menu
+holding Statistics, Lore, Help, the legend, Hide interface, Save and the main
+menu.
+
+The map fills everything below the bar, cropped to the screen's shape rather
+than letterboxed, so a wide screen opens on the heartland and pans north and
+south. Zoomed right out, cities show only their names; zoom in and the troop
+and officer counts appear. City boxes and road glyphs stop growing once they
+reach a comfortable size on screen, so zooming in opens ground between cities
+instead of enlarging labels. Clicking a city slides its panel in over the
+right-hand side of the map; close it with × or Esc and bring it back with the
+tab on the right edge. The legend of houses is an overlay behind the ▤ button
+beside the zoom controls. The latest chronicle entry runs in a strip along the
+bottom with a count of unread entries; click it to open the full chronicle over
+the map. **H** hides the whole interface to watch the map.
+
 **Statistics** charts cities and troops by house over the years and counts
 battles, captures and deaths. **Lore** is an encyclopaedia of forty
 biographies, city notes and the events of the age; officer names with a dotted
-underline open their entry. **?** opens help with the keyboard shortcuts:
-Space or Enter ends the month, Tab cycles your cities with idle officers, R, F,
-D, O, S, L and M open the screens, + and − zoom, the arrows pan, Home refits,
-Esc closes. The Menu offers **Undo this month**, a quick save and three named
-save slots.
+underline open their entry. **Help** lists the keyboard shortcuts: Space or
+Enter ends the month, Tab cycles your cities with idle officers, R, F, D, O, S,
+L and M open the screens, H hides the interface, + and − zoom, the arrows pan,
+Home refits, Esc closes a dialog, the chronicle or the panel. The main menu
+offers **Undo this month**, a quick save and three named save slots.
 
 `node tools/test.js` runs the headless test suite: data integrity, battles,
 treaties, exile, treasures, ranks, every scenario, thirty-year simulations, and

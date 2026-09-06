@@ -36,28 +36,34 @@
         </div>
         <div class="tb-stats" id="tb-stats"></div>
         <div class="tb-actions">
-          <button class="btn" id="btn-overview">Realm</button>
-          <button class="btn" id="btn-officers">Officers</button>
-          <button class="btn" id="btn-diplomacy">Diplomacy</button>
-          <button class="btn" id="btn-objectives">Objectives</button>
-          <button class="btn" id="btn-stats" title="Charts of the era">Statistics</button>
-          <button class="btn" id="btn-wiki" title="Encyclopaedia">Lore</button>
-          <button class="btn" id="btn-help" title="Keyboard shortcuts and help (?)">?</button>
-          <button class="btn" id="btn-save">Save</button>
-          <button class="btn" id="btn-menu">Menu</button>
-          <label id="auto-pause-wrap" class="auto-pause" hidden title="Stop auto-play and show a popup when a major event happens"><input type="checkbox" id="auto-pause" checked> Pause on major events</label>
-          <select id="auto-speed" class="auto-speed" hidden title="Auto-play speed">
-            <option value="3000">Very slow · 3s</option>
-            <option value="1500">Slow · 1.5s</option>
-            <option value="600" selected>Normal · 0.6s</option>
-            <option value="200">Fast · 0.2s</option>
-          </select>
-          <button class="btn" id="btn-auto" hidden>▶▶ Auto</button>
+          <span id="tb-badges" class="tb-badges"></span>
+          <button class="btn tab" id="btn-overview" title="The realm (R)">Realm</button>
+          <button class="btn tab" id="btn-officers" title="Officers of the realm (F)">Officers</button>
+          <button class="btn tab" id="btn-diplomacy" title="Diplomacy (D)">Diplomacy</button>
+          <button class="btn tab" id="btn-objectives" title="Objectives and destiny (O)">Objectives</button>
+          <span id="auto-ctl" class="auto-ctl" hidden>
+            <select id="auto-speed" class="auto-speed" title="Auto-play speed">
+              <option value="3000">Very slow · 3s</option>
+              <option value="1500">Slow · 1.5s</option>
+              <option value="600" selected>Normal · 0.6s</option>
+              <option value="200">Fast · 0.2s</option>
+            </select>
+            <label id="auto-pause-wrap" class="auto-pause" title="Stop auto-play and show a popup when a major event happens"><input type="checkbox" id="auto-pause" checked> Pause on events</label>
+            <button class="btn" id="btn-auto">▶▶ Auto</button>
+          </span>
           <button class="btn btn-gold" id="btn-endturn">End Month ▶</button>
+          <button class="btn" id="btn-more" title="Statistics, lore, help, save and menu">≡</button>
+          <div id="more-menu" class="dropdown" hidden>
+            <button id="btn-stats">Statistics <kbd>S</kbd></button>
+            <button id="btn-wiki">Lore <kbd>L</kbd></button>
+            <button id="btn-help">Help <kbd>?</kbd></button>
+            <button id="btn-legend">Legend</button>
+            <button id="btn-cinema">Hide interface <kbd>H</kbd></button>
+            <button id="btn-save">Save</button>
+            <button id="btn-menu">Main menu <kbd>M</kbd></button>
+          </div>
         </div>
       </header>
-
-      <div id="legend" class="legend-bar"></div>
 
       <main id="main">
         <div id="map-wrap">
@@ -65,21 +71,25 @@
           <div class="zoom-ov">
             <button id="zoom-in" title="Zoom in">+</button>
             <button id="zoom-out" title="Zoom out">−</button>
-            <button id="zoom-reset" title="Fit map">⤢</button>
+            <button id="zoom-reset" title="Refit the map (Home)">⤢</button>
             <button id="toggle-territory" title="Territory shading (off)">◧</button>
+            <button id="toggle-legend" title="Legend of houses">▤</button>
           </div>
-          <div class="map-hint">drag to pan · wheel or pinch to zoom</div>
+          <div id="legend" class="legend-ov" hidden></div>
           <div id="tip" class="tip" hidden></div>
+          <aside id="side" class="drawer">
+            <button id="drawer-close" class="drawer-close" title="Close the panel (Esc)">×</button>
+            <div id="panel"></div>
+          </aside>
+          <button id="drawer-handle" class="drawer-handle" title="Open the panel">◂</button>
+          <div id="ticker" class="ticker" title="Open the chronicle"><span class="lt" id="ticker-time"></span><span id="ticker-text"></span><span id="ticker-more" class="ticker-more"></span></div>
+          <div id="chronicle" class="chronicle" hidden>
+            <div class="log-title">Chronicle <button id="chron-close" class="btn-sm">Close</button></div>
+            <div id="log"></div>
+          </div>
+          <button id="cinema-exit" class="cinema-exit" title="Show the interface (H)">▤</button>
         </div>
-        <aside id="side">
-          <div id="panel"></div>
-        </aside>
       </main>
-
-      <footer id="logbar">
-        <div class="log-title">Chronicle</div>
-        <div id="log"></div>
-      </footer>
     </section>
 
     <!-- ===== Modal ===== -->
