@@ -5,10 +5,10 @@ const vm = require('vm');
 const path = require('path');
 
 const root = path.join(__dirname, '..', 'js');
-const src = ['data.js', 'events.js', 'game.js', 'geo.js', 'terrain.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const src = ['data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js', 'geo.js', 'terrain.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 const ctx = { localStorage: { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; } }, console };
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP;', ctx);
+vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP; this.BATTLE = BATTLE; this.HEXMAPS = HEXMAPS;', ctx);
 const G = ctx;
 
 let passed = 0, failed = 0;
@@ -69,8 +69,26 @@ test('a fresh game has a valid ruler for every house and the Emperor with Dong Z
 });
 test('battle: a 1.4 strength ratio wins most of the time', () => {
   let wins = 0; const n = 60;
-  for (let i = 0; i < n; i++) { G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.xiaopei.troops = 10000; S.provinces.xiaopei.defense = 200; S.provinces.chenliu.troops = 40000; S.provinces.chenliu.food = 1e6; const r = G.Game.attack('chenliu', 'xiaopei', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 30000); assert(r.ok, r.msg); if (r.report.result === 'captured') wins++; }
+  for (let i = 0; i < n; i++) { G.Game.newGame('caocao'); const S = G.Game.state(); S.options.tactical = false; S.provinces.xiaopei.troops = 10000; S.provinces.xiaopei.defense = 200; S.provinces.chenliu.troops = 40000; S.provinces.chenliu.food = 1e6; const r = G.Game.attack('chenliu', 'xiaopei', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 30000); assert(r.ok, r.msg); if (r.report.result === 'captured') wins++; }
   assert(wins / n > 0.8, `win rate ${wins}/${n}`);
+});
+test('tactical battle: sieges resolve within four months and reach the map; player battles wait, save and auto-fight', () => {
+  for (const id of Object.keys(G.HEXMAPS)) assert(G.HEXMAPS[id].terrain.length === 156 && G.HEXMAPS[id].exits.length >= 1, `hex map ${id}`);
+  let captured = 0, days = 0;
+  for (let i = 0; i < 6; i++) {
+    G.Game.newGame(null); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 200000; S.provinces.xuchang.troops = 8000; S.provinces.xuchang.owner = 'yuanshu';
+    for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+    const r = G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 25000);
+    assert(r.ok && r.report && r.report.tactical, 'AI-vs-AI battle resolves at once: ' + JSON.stringify(r).slice(0, 80));
+    assert(!S.battles.xuchang, 'battle cleared'); if (r.report.result === 'captured') { captured++; assert(S.provinces.xuchang.owner === 'caocao', 'owner changed'); }
+    const last = r.report.lines[r.report.lines.length - 1]; const m = last && last.text.match(/Day (\d+)/); if (m) days = Math.max(days, +m[1]);
+  }
+  assert(captured >= 3, `captures ${captured}/6`); assert(days <= 125, 'siege length ' + days);
+  G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 99999;
+  const r = G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren'], 20000); assert(r.ok && r.battle === 'xuchang' && S.battles.xuchang, 'player battle created');
+  assert(G.Game.battleBeginDay('xuchang').ok && S.battles.xuchang.phase === 'player', 'day begins for the player');
+  G.Game.save(); assert(G.Game.load() && G.Game.state().battles.xuchang, 'battle survives save and load');
+  assert(G.Game.battleAutoMonth('xuchang').ok, 'auto month');
 });
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();

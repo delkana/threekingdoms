@@ -457,3 +457,62 @@ kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--border); 
   .stat b::after { content: attr(data-k); font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-left: 3px; font-weight: normal; }
   .tb-stats { gap: 10px; }
 }
+
+/* ================= Battle screen ================= */
+#battle-screen { position: fixed; inset: 0; z-index: 30; background: #1a1510; display: flex; flex-direction: column; }
+.bt-head { display: flex; align-items: center; gap: 14px; padding: 6px 12px; background: linear-gradient(#2c241b, #211b14); border-bottom: 1px solid var(--border); }
+.bt-head h2 { margin: 0; color: var(--gold2); font-size: 18px; }
+.bt-day { color: var(--text); font-size: 14px; } .bt-food { color: var(--muted); font-size: 12.5px; }
+.bt-main { flex: 1; display: flex; min-height: 0; }
+.bt-map { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; background: #1e1913; overflow: auto; }
+.bt-map svg { width: 100%; height: 100%; }
+.bt-side { width: 360px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+#bt-sides { padding: 10px 12px 4px; font-size: 13px; }
+#bt-sides .side { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; border-bottom: 1px dotted #3d3327; }
+#bt-sides .side b { font-weight: normal; }
+.bt-unit { padding: 8px 12px; font-size: 13px; min-height: 64px; border-bottom: 1px solid var(--border); }
+.bt-unit .u-name { color: var(--gold2); font-weight: bold; }
+.bt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.bt-actions button { padding: 8px 6px; font-size: 13px; }
+.bt-actions button.wide { grid-column: span 2; }
+.bt-actions button.mode { border-color: var(--gold2); color: var(--gold2); }
+.bt-log { flex: 1; overflow-y: auto; padding: 6px 12px; font-size: 12.5px; line-height: 1.45; }
+.bt-log .att { color: #e29a8f; } .bt-log .def { color: #9fd69f; } .bt-log .bad { color: #f0c8c0; font-style: italic; }
+.bt-log .day-head { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
+.unit { stroke: rgba(0,0,0,0.75); stroke-width: 1; }
+.unit-token.sel .unit { stroke: #fff; stroke-width: 2.2; }
+.unit-token.acted { opacity: 0.6; }
+.unit-token { cursor: pointer; }
+.unit-n { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.unit-o { font-family: var(--serif); fill: rgba(255,255,255,0.9); text-shadow: 0 1px 2px #000; pointer-events: none; }
+.hl { cursor: pointer; stroke-width: 1.4; }
+.hl.move { fill: rgba(120, 200, 120, 0.28); stroke: rgba(150, 240, 150, 0.7); }
+.hl.attack { fill: rgba(230, 80, 60, 0.30); stroke: rgba(255, 120, 100, 0.85); }
+.hl.ram { fill: rgba(240, 190, 60, 0.32); stroke: rgba(255, 210, 90, 0.9); }
+
+.prov .battle-mark { font-size: 12px; fill: #ff8a7a; text-shadow: 0 1px 2px #000; }
+@media (max-width: 900px) {
+  .bt-main { flex-direction: column; }
+  .bt-side { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 48%; }
+}
+/* hex battlefield drawing (shared with hexmaps.html) */
+#battle-screen .hex { stroke: rgba(255, 235, 200, 0.10); stroke-width: 0.8; }
+#battle-screen .hex.wall { stroke: rgba(255, 225, 160, 0.55); stroke-width: 1.2; }
+#battle-screen .glyph { font-family: var(--serif); pointer-events: none; }
+#battle-screen .river-bank { fill: none; stroke: #1e3a4a; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+#battle-screen .river { fill: none; stroke: #4f93b8; stroke-linecap: round; stroke-linejoin: round; }
+#battle-screen .river-glint { fill: none; stroke: rgba(190, 230, 250, 0.45); stroke-linecap: round; stroke-linejoin: round; }
+#battle-screen .lake { fill: #3f7fa3; stroke: rgba(190, 225, 240, 0.4); stroke-width: 1; }
+#battle-screen .road-line { fill: none; stroke: rgba(212, 167, 71, 0.75); stroke-width: 2.2; stroke-dasharray: 5 4; stroke-linecap: round; stroke-linejoin: round; }
+#battle-screen .road-line.bridge { stroke: #f0dcae; stroke-dasharray: 2 3; stroke-width: 3; }
+#battle-screen .geo-label { font-family: var(--serif); font-style: italic; fill: rgba(200, 215, 225, 0.6); letter-spacing: 1px; pointer-events: none; }
+#battle-screen .exit-label { font-family: var(--serif); font-size: 11px; fill: var(--gold2); font-style: italic; }
+#battle-screen .exit-glyph { font-size: 12px; fill: #cfe6f0; }
+#battle-screen .wall-line { fill: none; stroke: #3a2c18; stroke-width: 5; stroke-linecap: round; }
+#battle-screen .wall-top { fill: none; stroke: #c9ad78; stroke-width: 2.4; stroke-linecap: round; }
+#battle-screen .wall-inner .wall-line { stroke-width: 3.5; } .wall-inner .wall-top { stroke-width: 1.6; }
+#battle-screen .tower { fill: #d9c08a; stroke: #3a2c18; stroke-width: 1; }
+#battle-screen .gate { fill: #7a5a2c; stroke: #f0dcae; stroke-width: 1; }
+#battle-screen .city-name { font-family: var(--serif); font-weight: bold; fill: #fff; text-shadow: 0 1px 2px #000; }
+#battle-screen .owner-chip { stroke: rgba(0,0,0,0.6); stroke-width: 0.8; }
+#battle-screen .coord { font-family: var(--serif); font-size: 7.5px; fill: rgba(255,255,255,0.4); }

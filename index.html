@@ -93,6 +93,28 @@
       </main>
     </section>
 
+    <!-- ===== Battle screen ===== -->
+    <section id="battle-screen" hidden>
+      <div class="bt-head">
+        <h2 id="bt-title"></h2>
+        <span id="bt-day" class="bt-day"></span>
+        <span id="bt-food" class="bt-food"></span>
+        <span style="margin-left:auto"></span>
+        <button class="btn" id="bt-help" title="How the battle works">?</button>
+        <button class="btn" id="bt-close">Back to the map</button>
+      </div>
+      <div class="bt-main">
+        <div class="bt-map"><svg id="bt-map"></svg></div>
+        <aside class="bt-side">
+          <div id="bt-sides"></div>
+          <div id="bt-unit" class="bt-unit"></div>
+          <div class="bt-actions" id="bt-actions"></div>
+          <div class="log-title">Battle log</div>
+          <div id="bt-log" class="bt-log"></div>
+        </aside>
+      </div>
+    </section>
+
     <!-- ===== Modal ===== -->
     <div id="modal" hidden>
       <div class="modal-box" id="modal-box"></div>
@@ -101,6 +123,9 @@
 
   <script src="js/data.js"></script>
   <script src="js/events.js"></script>
+  <script src="js/hexmaps.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/hexview.js"></script>
   <script src="js/game.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/terrain.js"></script>

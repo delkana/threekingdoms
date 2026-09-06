@@ -63,10 +63,10 @@ const BATTLE = (() => {
   const neighbours = (c, r, w, h) => (r & 1 ? [[1, 0], [1, 1], [0, 1], [-1, 0], [0, -1], [1, -1]] : [[1, 0], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]]).map(([dc, dr]) => [c + dc, r + dr]).filter(([cc, rr]) => cc >= 0 && cc < w && rr >= 0 && rr < h);
 
   // Defenders hold the gates first, then the walls, then the city itself, then the ground just outside.
-  function deployDefender(map, units) {
+  function deployDefender(map, units, exit = null) {
     const at = (c, r) => map.terrain[r * map.w + c]; const spots = []; const prio = { G: 0, W: 1, C: 2 };
-    for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) { const t = at(c, r); if (t in prio) spots.push({ c, r, p: prio[t], d: hexDist(c, r, 6, 5) }); }
-    spots.sort((a, b) => a.p - b.p || a.d - b.d);
+    for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) { const t = at(c, r); if (t in prio) spots.push({ c, r, p: prio[t], d: hexDist(c, r, 6, 5), e: exit ? hexDist(c, r, exit.c, exit.r) : 0 }); }
+    spots.sort((a, b) => a.p - b.p || a.e - b.e || a.d - b.d);
     const out = []; const used = new Set();
     for (const s of spots) { if (out.length >= units.length) break; out.push({ c: s.c, r: s.r, troops: units[out.length] }); used.add(`${s.c},${s.r}`); }
     // overflow spills outside the walls, nearest first, on standable ground
@@ -90,5 +90,265 @@ const BATTLE = (() => {
     return order.map(([c, r], i) => ({ c, r, troops: units[i] }));
   }
 
-  return { MAX_UNITS, BASE_UNIT, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, hexDist, neighbours, deployDefender, deployAttacker };
+
+  // ============================================================
+  //  The battle engine. A battle is a plain state object (kept in the
+  //  strategic state so it saves and loads) and is advanced one day at a
+  //  time. Each day the attacker's units act, then the defender's; then
+  //  food is eaten, reinforcements arrive and victory is checked.
+  //  Units: { id, side 'A'|'D', fid, troops, max, training, war, ldr, int, officers:[names], morale, c, r, mp, acted, from }
+  // ============================================================
+  const MP_PER_DAY = 3, FOOD_PER_MAN_DAY = 0.1 / 30, VOLLEY_RANGE = 2, GATE_HITS = 3;
+  const key = (c, r) => `${c},${r}`;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const ri = (a, b) => Math.floor(rnd(a, b + 1));
+
+  function terrainAt(B, c, r) { const m = HEXMAPS[B.city]; return c >= 0 && c < m.w && r >= 0 && r < m.h ? m.terrain[r * m.w + c] : null; }
+  const roadAt = (B, c, r) => { const m = HEXMAPS[B.city]; return HEXMAPS[B.city].roads[r * m.w + c] === '1'; };
+  const unitAt = (B, c, r) => B.units.find((u) => u.c === c && u.r === r);
+  const gateOpen = (B, c, r) => (B.gates[key(c, r)] || 0) >= GATE_HITS;
+  const anyGateOpen = (B) => Object.values(B.gates).some((h) => h >= GATE_HITS);
+  const insideWalls = (t) => 'CWG'.includes(t);
+
+  // movement cost to enter a hex for a unit of `side`; null = cannot
+  function enterCost(B, u, c, r) {
+    const t = terrainAt(B, c, r); if (t === null) return null;
+    const road = roadAt(B, c, r); const rule = TERRAIN[t];
+    if (unitAt(B, c, r)) return null;   // occupied
+    if (t === 'W') { if (u.side === 'D') return 1; return anyGateOpen(B) ? 2 : null; }
+    if (t === 'C') { if (u.side === 'D') return 1; return anyGateOpen(B) ? 1 : null; }
+    if (t === 'G') { if (u.side === 'D') return 1; return gateOpen(B, c, r) ? 2 : null; }   // a barred gate must be rammed open first
+    if (rule.move === null) return road ? (t === 'm' ? 3 : 2) : null;
+    return road && rule.move > 1 ? 1 : rule.move;
+  }
+  // Dijkstra from the unit's hex: returns { key: { cost, prev } } for all hexes reachable at any cost
+  function reach(B, u, maxCost = Infinity) {
+    const m = HEXMAPS[B.city]; const dist = { [key(u.c, u.r)]: { cost: 0, prev: null, c: u.c, r: u.r } };
+    const open = [[0, u.c, u.r]];
+    while (open.length) {
+      open.sort((a, b) => a[0] - b[0]); const [cost, c, r] = open.shift();
+      if (cost > (dist[key(c, r)] || { cost: 1e9 }).cost) continue;
+      for (const [nc, nr] of neighbours(c, r, m.w, m.h)) {
+        const step = enterCost(B, u, nc, nr); if (step === null) continue;
+        const nc2 = cost + step; if (nc2 > maxCost) continue;
+        const k = key(nc, nr); if (!dist[k] || nc2 < dist[k].cost) { dist[k] = { cost: nc2, prev: key(c, r), c: nc, r: nr }; open.push([nc2, nc, nr]); }
+      }
+    }
+    return dist;
+  }
+  const canReach = (B, u) => Object.values(reach(B, u, u.mp)).filter((d) => d.cost > 0);
+
+  function bestStat(u, offs, k, fallback) { return offs.length ? Math.max(...offs.map((o) => o[k])) : fallback; }
+  function strength(B, u, ctx) {
+    const offs = u.officers.map((n) => ctx.officer(n)).filter(Boolean);
+    const war = bestStat(u, offs, 'war', 40), ldr = bestStat(u, offs, 'ldr', 40);
+    return u.troops * (0.5 + war / 100) * (0.7 + ldr / 250) * (0.7 + u.training / 300) * (0.6 + 0.4 * u.morale / 100);
+  }
+  function defenceBonus(B, u) {
+    const t = terrainAt(B, u.c, u.r); let b = TERRAIN[t].def;
+    if (t === 'G' && gateOpen(B, u.c, u.r)) b = 0;   // a broken gate shelters no one
+    if (u.side === 'D' && 'WG'.includes(t)) b += Math.min(0.4, (B.walls || 0) / 1000);   // the city's walls add to the ring
+    return b;
+  }
+  const sideUnits = (B, side) => B.units.filter((u) => u.side === side);
+  const sidePower = (B, side, ctx) => sideUnits(B, side).reduce((a, u) => a + strength(B, u, ctx), 0);
+  const sideTroops = (B, side) => sideUnits(B, side).reduce((a, u) => a + u.troops, 0);
+  const label = (u, ctx) => (u.officers.length ? `${u.officers[0]}'s ${u.side === 'A' ? 'column' : 'men'}` : ctx && ctx.fname && u.fid ? `an unled column of ${ctx.fname(u.fid)}` : u.side === 'A' ? 'an unled attacking column' : 'unled men of the garrison');
+  const PLACE = { G: 'at the gate', W: 'on the walls', C: 'in the city', h: 'on the hills', m: 'in the mountains', f: 'in the woods', w: 'in the marsh', a: 'in the fields', s: 'by the stream', r: 'at the river' };
+  const place = (B, c, r) => PLACE[terrainAt(B, c, r)] || 'on the plain';
+  function log(B, text, cls = '') { B.log.push({ day: B.day, text, cls }); if (B.log.length > 400) B.log.shift(); }
+
+  // a unit breaks: half its men are lost, the rest go home at the end; officers escape or are taken
+  function breakUnit(B, u, cause, ctx) {
+    B.units = B.units.filter((x) => x.id !== u.id);
+    const fled = Math.floor(u.troops * 0.5);
+    B[u.side === 'A' ? 'att' : 'def'].fled += fled;
+    for (const n of u.officers) {
+      if (Math.random() < 0.6) { log(B, `${n} escapes the rout.`); continue; }
+      B.captives.push({ name: n, by: u.side === 'A' ? 'D' : 'A' }); log(B, `${n} is taken prisoner!`, 'bad');
+    }
+    for (const f of B.units) if (f.side === u.side && hexDist(f.c, f.r, u.c, u.r) <= 1) f.morale = Math.max(0, f.morale - 6);
+    log(B, `${label(u, ctx)} ${cause} ${place(B, u.c, u.r)}: ${fled.toLocaleString()} men scatter.`, u.side === 'A' ? 'def' : 'att');
+  }
+  // one unit strikes another; the defender strikes back at reduced weight
+  function fight(B, u, v, ctx, ranged = false) {
+    const tu = terrainAt(B, u.c, u.r), tv = terrainAt(B, v.c, v.r);
+    let pu = strength(B, u, ctx) * ('rsl~'.includes(tu) ? 0.5 : 1);
+    if (tv === 'G' && !gateOpen(B, v.c, v.r) && !ranged) pu *= 0.7;   // storming a held gate is hard
+    if (ranged) pu *= 0.35;
+    const pv = strength(B, v, ctx) * (1 + defenceBonus(B, v));
+    const lossV = Math.round(v.troops * Math.min(0.35, 0.12 * Math.pow(pu / Math.max(1, pv), 1.0) * rnd(0.8, 1.2)));
+    const lossU = ranged ? 0 : Math.round(u.troops * Math.min(0.25, 0.075 * Math.pow(pv / Math.max(1, pu), 0.8) * rnd(0.8, 1.2)));
+    v.troops -= lossV; u.troops -= lossU; B.lastBlood = B.day;
+    if (!ranged && tv === 'G' && !gateOpen(B, v.c, v.r)) { B.gates[key(v.c, v.r)] = (B.gates[key(v.c, v.r)] || 0) + 1; if (gateOpen(B, v.c, v.r)) log(B, `The gate at ${key(v.c, v.r)} is broken open!`, 'att'); }
+    const rv = lossV / Math.max(1, v.troops + lossV), ru = lossU / Math.max(1, u.troops + lossU);
+    if (rv > ru * 1.3) { v.morale = Math.max(0, v.morale - 12); u.morale = Math.min(100, u.morale + 3); } else if (!ranged && ru > rv * 1.3) { u.morale = Math.max(0, u.morale - 8); v.morale = Math.min(100, v.morale + 3); }
+    u.acted = true;
+    log(B, `${label(u, ctx)} ${ranged ? 'looses arrows at' : 'attacks'} ${label(v, ctx)} ${place(B, v.c, v.r)}: ${lossV.toLocaleString()} fall${lossU ? `, ${lossU.toLocaleString()} of the attackers` : ''}.`, u.side === 'A' ? 'att' : 'def');
+    if (v.troops <= v.max * 0.12 || v.morale < 15) breakUnit(B, v, v.troops <= v.max * 0.12 ? 'is destroyed' : 'breaks and flees', ctx);
+    if (u.troops <= u.max * 0.12 || u.morale < 15) breakUnit(B, u, u.troops <= u.max * 0.12 ? 'is destroyed' : 'breaks and flees', ctx);
+  }
+
+  // ---- player and AI actions ----
+  function moveUnit(B, u, c, r) {
+    const d = reach(B, u, u.mp)[key(c, r)]; if (!d || d.cost === 0) return false;
+    u.c = c; u.r = r; u.mp -= d.cost;
+    return true;
+  }
+  // an attacker beside a barred, unheld gate spends its action on the ram
+  function ramGate(B, u, c, r) {
+    if (u.acted || u.side !== 'A' || terrainAt(B, c, r) !== 'G' || hexDist(u.c, u.r, c, r) !== 1 || unitAt(B, c, r) || gateOpen(B, c, r)) return false;
+    B.gates[key(c, r)] = (B.gates[key(c, r)] || 0) + 1; u.acted = true;
+    log(B, gateOpen(B, c, r) ? `${label(u)} breaks the gate open!` : `${label(u)} sets the ram against the gate (${(B.gates[key(c, r)] || 0)} of ${GATE_HITS} blows).`, 'att');
+    return true;
+  }
+  const rammableFor = (B, u) => { const m = HEXMAPS[B.city]; return neighbours(u.c, u.r, m.w, m.h).filter(([c, r]) => terrainAt(B, c, r) === 'G' && !unitAt(B, c, r) && !gateOpen(B, c, r)); };
+  function attackUnit(B, u, v, ctx) {
+    if (u.acted || u.side === v.side) return false;
+    const dist = hexDist(u.c, u.r, v.c, v.r);
+    if (dist === 1) { fight(B, u, v, ctx); return true; }
+    if (dist <= VOLLEY_RANGE && 'WGh'.includes(terrainAt(B, u.c, u.r))) { fight(B, u, v, ctx, true); return true; }
+    return false;
+  }
+  const targetsFor = (B, u) => B.units.filter((v) => v.side !== u.side && (hexDist(u.c, u.r, v.c, v.r) === 1 || (hexDist(u.c, u.r, v.c, v.r) <= VOLLEY_RANGE && 'WGh'.includes(terrainAt(B, u.c, u.r)))));
+
+  // shortest path (ignoring the day's MP) toward any of the goal hexes; returns the first step's key or null
+  function stepToward(B, u, goals) {
+    const dist = reach(B, u, Infinity); let best = null;
+    for (const g of goals) { const d = dist[g]; if (d && (!best || d.cost < best.cost)) best = d; }
+    if (!best) return null;
+    // walk back to the farthest hex on the path within this day's MP
+    let cur = best, last = null;
+    while (cur && cur.prev) { if (cur.cost <= u.mp) { last = cur; break; } cur = dist[cur.prev]; }
+    return last ? key(last.c, last.r) : null;
+  }
+  function aiSide(B, side, ctx) {
+    const m = HEXMAPS[B.city]; const enemy = side === 'A' ? 'D' : 'A';
+    const mine = sideUnits(B, side), foes = sideUnits(B, enemy);
+    if (!mine.length || !foes.length) return;
+    const ratio = sidePower(B, side, ctx) / Math.max(1, sidePower(B, enemy, ctx));
+    const centre = key(6, 5);
+    const gates = []; for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) if (m.terrain[r * m.w + c] === 'G') gates.push(key(c, r));
+    const pending = B.arrivals.some((a) => a.side === side && a.day > B.day);
+    const foodDays = side === 'A' ? B.att.food / Math.max(1, sideTroops(B, 'A') * FOOD_PER_MAN_DAY) : Infinity;
+    for (const u of mine) {
+      if (!B.units.includes(u)) continue;
+      // fight anything in reach that is worth fighting
+      const targets = targetsFor(B, u).sort((a, b) => strength(B, a, ctx) * (1 + defenceBonus(B, a)) - strength(B, b, ctx) * (1 + defenceBonus(B, b)));
+      const attackable = targets.filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1);
+      const worth = (v) => strength(B, u, ctx) >= strength(B, v, ctx) * (1 + defenceBonus(B, v)) * (side === 'A' ? 0.7 : 0.9);
+      if (side === 'D') {
+        const t = terrainAt(B, u.c, u.r);
+        // an unheld gate with enemies at it: the nearest wall unit steps onto it
+        if (insideWalls(t) && t !== 'G') {
+          const threatened = gates.map((k) => k.split(',').map(Number)).filter(([gc, gr]) => !unitAt(B, gc, gr) && !gateOpen(B, gc, gr) && foes.some((f) => hexDist(f.c, f.r, gc, gr) <= 2)).sort((a, b) => hexDist(u.c, u.r, a[0], a[1]) - hexDist(u.c, u.r, b[0], b[1]));
+          if (threatened.length && hexDist(u.c, u.r, threatened[0][0], threatened[0][1]) <= 2 && !mine.some((o) => o !== u && hexDist(o.c, o.r, threatened[0][0], threatened[0][1]) < hexDist(u.c, u.r, threatened[0][0], threatened[0][1]))) { const step = stepToward(B, u, [key(threatened[0][0], threatened[0][1])]); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); } }
+        }
+        if (targets.length && !attackable.length) { fight(B, u, targets[0], ctx, true); continue; }   // volley from the walls
+        if (attackable.length && (worth(attackable[0]) || !insideWalls(t))) { fight(B, u, attackable[0], ctx); continue; }
+        if (!insideWalls(t)) { const goal = stepToward(B, u, gates.concat([centre]).filter((k) => !unitAt(B, +k.split(',')[0], +k.split(',')[1]))); if (goal) { const [c, r] = goal.split(',').map(Number); moveUnit(B, u, c, r); } }
+        continue;
+      }
+      // attacker
+      const stalled = B.day - (B.lastBlood || 0) > 14;   // a fortnight without a fight: no more waiting
+      const assault = ratio >= 0.9 || foodDays < 4 || ((!pending || stalled) && ratio >= 0.6);
+      if (!assault) { if (attackable.length && worth(attackable[0])) fight(B, u, attackable[0], ctx); continue; }   // wait for the reinforcements
+      if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G')) { fight(B, u, attackable[0], ctx); continue; }
+      const ram = rammableFor(B, u); if (ram.length) { ramGate(B, u, ram[0][0], ram[0][1]); continue; }
+      // march: through an open gate to the centre, or up to the nearest gate (a hex beside it, since barred gates cannot be entered)
+      const m2 = HEXMAPS[B.city];
+      const besideGates = []; for (const g of gates) { const [gc, gr] = g.split(',').map(Number); if (gateOpen(B, gc, gr)) { if (!unitAt(B, gc, gr)) besideGates.push(g); } else for (const [nc, nr] of neighbours(gc, gr, m2.w, m2.h)) if (!insideWalls(terrainAt(B, nc, nr)) && !unitAt(B, nc, nr)) besideGates.push(key(nc, nr)); }
+      const goals = anyGateOpen(B) ? [centre].concat(besideGates) : besideGates;
+      const step = stepToward(B, u, goals);
+      if (step) { const [c, r] = step.split(',').map(Number); if (moveUnit(B, u, c, r)) { const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1); const ram2 = rammableFor(B, u); if (again.length && !u.acted && (worth(again[0]) || terrainAt(B, again[0].c, again[0].r) === 'G')) fight(B, u, again[0], ctx); else if (ram2.length && !u.acted) ramGate(B, u, ram2[0][0], ram2[0][1]); } }
+      else if (attackable.length) fight(B, u, attackable[0], ctx);
+    }
+    // the attacker gives up when the fight is hopeless
+    const stalledOut = B.day - (B.lastBlood || 0) > 14 && ratio < 0.6;
+    if (side === 'A' && (((!pending || stalledOut) && ((sideTroops(B, 'A') < B.att.start * 0.3 && ratio < 1) || (foodDays < 1 && ratio < 1) || ratio < 0.35 || stalledOut)) || B.day >= 120)) { if (B.day >= 120) log(B, 'Four months before the walls: the siege is abandoned.', 'def'); withdraw(B, 'A', ctx); }
+  }
+
+  function withdraw(B, side, ctx) {
+    if (B.over) return;
+    if (side === 'A') { B.att.fled += sideTroops(B, 'A'); B.units = B.units.filter((u) => u.side !== 'A'); B.over = { result: 'withdrawn' }; log(B, `${ctx.fname(B.att.fid)} breaks off the siege and withdraws.`, 'def'); }
+    else { B.def.fled += sideTroops(B, 'D'); B.units = B.units.filter((u) => u.side !== 'D'); B.over = { result: 'captured' }; log(B, `The garrison abandons the city and slips away.`, 'att'); }
+  }
+
+  // ---- the day ----
+  function deployArrival(B, a, ctx) {
+    const m = HEXMAPS[B.city];
+    const units = attachOfficers(splitArmy(a.troops), a.officers.map((n) => ctx.officer(n)).filter(Boolean));
+    const exit = a.exit || (a.side === 'A' ? B.att.exit : B.def.exit) || m.exits[0];
+    const spots = deployAttacker(m, exit, units.map((u) => u.troops)).filter((s) => !unitAt(B, s.c, s.r));
+    // fall back to any free standable hex near the exit
+    let i = 0;
+    for (const u of units) {
+      let s = spots[i++];
+      if (!s) { const free = []; for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) if (!unitAt(B, c, r) && standable(m.terrain[r * m.w + c], m.roads[r * m.w + c] === '1') && !insideWalls(m.terrain[r * m.w + c])) free.push({ c, r, d: hexDist(c, r, exit.c, exit.r) }); free.sort((x, y) => x.d - y.d); s = free[0]; }
+      if (!s) break;
+      B.units.push(makeUnit(B, a.side, a.fid, u.troops, a.training || 50, u.officers, s.c, s.r, a.from, ctx));
+    }
+    if (a.side === 'A') B.att.food += a.food || 0; else ctx.cityFood(a.food || 0);
+    if (a.side === 'A') B.att.start += a.troops;
+    log(B, `${ctx.fname(a.fid)} reinforces the ${a.side === 'A' ? 'besiegers' : 'garrison'} with ${a.troops.toLocaleString()} men${a.officers.length ? ` under ${a.officers.join(', ')}` : ''}${a.food ? ` and ${a.food.toLocaleString()} food` : ''}.`, a.side === 'A' ? 'att' : 'def');
+  }
+  function makeUnit(B, side, fid, troops, training, officers, c, r, from, ctx) {
+    const offs = officers.map((n) => ctx.officer(n)).filter(Boolean);
+    return { id: ++B.nextId, side, fid, troops, max: troops, training, officers, morale: Math.min(100, 70 + Math.round(bestStat(null, offs, 'ldr', 40) / 4)), c, r, mp: MP_PER_DAY, acted: false, from };
+  }
+  function checkOver(B, ctx) {
+    if (B.over) return;
+    const A = sideUnits(B, 'A'), D = sideUnits(B, 'D');
+    if (!A.length) { B.over = { result: 'annihilated' }; log(B, `The besieging army is destroyed.`, 'def'); return; }
+    if (!D.length) { B.over = { result: 'captured' }; log(B, `The last defenders fall. ${ctx.pname(B.city)} is taken!`, 'att'); return; }
+    const dInside = D.filter((u) => insideWalls(terrainAt(B, u.c, u.r)));
+    const centreHeld = A.some((u) => u.c === 6 && u.r === 5) && (!dInside.length || sideTroops(B, 'D') < sideTroops(B, 'A') * 0.3);
+    if (centreHeld) { B.over = { result: 'captured' }; log(B, `The attackers hold the heart of ${ctx.pname(B.city)}. The city has fallen!`, 'att'); }
+  }
+  function beginDay(B) { B.day++; B.dayInMonth++; for (const u of B.units) { u.mp = MP_PER_DAY; u.acted = false; } }
+  function endDay(B, ctx) {
+    // food
+    const eatA = Math.ceil(sideTroops(B, 'A') * FOOD_PER_MAN_DAY), eatD = Math.ceil(sideTroops(B, 'D') * FOOD_PER_MAN_DAY);
+    B.att.food -= eatA; const starvedD = !ctx.cityFood(-eatD);
+    if (B.att.food < 0) { B.att.food = 0; for (const u of sideUnits(B, 'A')) { u.morale = Math.max(0, u.morale - 6); u.troops -= Math.floor(u.troops * 0.02); } if (B.day % 3 === 0) log(B, 'The besiegers are out of grain; men desert by night.', 'def'); }
+    if (starvedD) { for (const u of sideUnits(B, 'D')) { u.morale = Math.max(0, u.morale - 6); u.troops -= Math.floor(u.troops * 0.02); } if (B.day % 3 === 0) log(B, 'The granaries of the city are empty; the garrison starves.', 'att'); }
+    for (const u of [...B.units]) if (u.troops <= u.max * 0.12 || u.morale < 15) breakUnit(B, u, 'melts away', ctx);
+    // a night's rest steadies every unit, idle ones most
+    for (const u of B.units) u.morale = Math.min(100, u.morale + (u.acted ? 2 : 4));
+    // arrivals
+    for (const a of B.arrivals.filter((x) => x.day <= B.day && !x.done)) { a.done = true; deployArrival(B, a, ctx); }
+    B.arrivals = B.arrivals.filter((x) => !x.done);
+    checkOver(B, ctx);
+    ctx.syncCity(B);
+    if (B.replay) B.replay.push({ day: B.day, units: B.units.map((u) => ({ id: u.id, side: u.side, fid: u.fid, troops: u.troops, officers: u.officers.slice(0, 1), c: u.c, r: u.r })), gates: { ...B.gates }, log: B.log.filter((l) => l.day === B.day).map((l) => l.text) });
+  }
+  // a whole day with both sides played by the AI (or one side by the AI when the other has already acted)
+  function runDay(B, ctx, playerSide = null) {
+    if (B.over) return;
+    beginDay(B);
+    if (playerSide !== 'A') aiSide(B, 'A', ctx);
+    if (!B.over) checkOver(B, ctx);
+    if (!B.over && playerSide !== 'D') aiSide(B, 'D', ctx);
+    endDay(B, ctx);
+  }
+
+  // ---- creation ----
+  function create({ city, attF, defF, fromCity, troops, food, officers, training, walls, exit, cityTroops, cityOfficers, cityTraining, control, ctx, record }) {
+    const m = HEXMAPS[city];
+    const B = { city, attF, defF, day: 0, dayInMonth: 0, startedTurn: ctx.turn(), nextId: 0, units: [], arrivals: [], gates: {}, captives: [], log: [], over: null, walls,
+      att: { fid: attF, from: fromCity, food, start: troops, fled: 0, exit, control: control.A, asked: false },
+      def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false }, replay: record ? [] : null };
+    const aUnits = attachOfficers(splitArmy(troops), officers.map((n) => ctx.officer(n)).filter(Boolean));
+    for (const [i, pos] of deployAttacker(m, exit, aUnits.map((u) => u.troops)).entries()) B.units.push(makeUnit(B, 'A', attF, aUnits[i].troops, training, aUnits[i].officers, pos.c, pos.r, fromCity, ctx));
+    const dUnits = attachOfficers(splitArmy(cityTroops), cityOfficers.map((n) => ctx.officer(n)).filter(Boolean));
+    for (const [i, pos] of deployDefender(m, dUnits.map((u) => u.troops), exit).entries()) B.units.push(makeUnit(B, 'D', defF, dUnits[i].troops, cityTraining, dUnits[i].officers, pos.c, pos.r, city, ctx));
+    log(B, `${ctx.fname(attF)} marches on ${ctx.pname(city)} with ${troops.toLocaleString()} men in ${aUnits.length} units; ${defF ? ctx.fname(defF) : 'the town'} holds it with ${cityTroops.toLocaleString()}.`);
+    return B;
+  }
+  function addArrival(B, { side, fid, from, troops, food, officers, training, days, exit }) {
+    B.arrivals.push({ side, fid, from, troops, food: food || 0, officers: officers || [], training: training || 50, day: B.day + days, exit: exit || null, done: false });
+  }
+
+  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, hexDist, neighbours, deployDefender, deployAttacker,
+    create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
 })();

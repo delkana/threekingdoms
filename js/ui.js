@@ -88,7 +88,8 @@ const UI = (() => {
     $('#drawer-handle').addEventListener('click', openDrawer);
     $('#ticker').addEventListener('click', () => toggleChronicle());
     $('#chron-close').addEventListener('click', () => toggleChronicle(false));
-    $('#tb-badges').addEventListener('click', (e) => { const b = e.target.closest('.badge.act'); if (b && b.dataset.act === 'idle') cycleIdle(); });
+    $('#tb-badges').addEventListener('click', (e) => { const b = e.target.closest('.badge.act'); if (b && b.dataset.act === 'idle') cycleIdle(); if (b && b.dataset.act === 'battle') { const pb = Game.playerBattles()[0]; if (pb) openBattle(pb.city); } });
+    initBattleScreen();
     window.addEventListener('resize', () => { if ($('#game-screen').hidden) return; const r = $('#map').getBoundingClientRect(); if (!r.width || !r.height) return; VB.h = VB.w / (r.width / r.height); clampView(); applyViewBox(); });
     $('#btn-observe').addEventListener('click', () => startGame(null));
     initMapControls();
@@ -232,7 +233,9 @@ const UI = (() => {
     const idleN = f.guest ? Game.factionOfficers(S.player).filter((o) => !o.acted).length : idle;
     const caps = S.pendingCaptives.filter((c) => c.captor === S.player).length;
     const props = (S.pendingProposals || []).length;
+    const pbs = Game.playerBattles();
     $('#tb-badges').innerHTML = [
+      pbs.length ? `<span class="badge warn act" data-act="battle" title="A battle awaits your orders">⚔ ${pbs.length} battle${pbs.length > 1 ? 's' : ''}</span>` : '',
       idleN ? `<span class="badge act" data-act="idle" title="Officers who have not acted this month. Click or press Tab to cycle their cities.">⚑ ${idleN} idle</span>` : '',
       caps ? `<span class="badge warn" title="Captives awaiting your judgement at the end of the month">⛓ ${caps} captive${caps > 1 ? 's' : ''}</span>` : '',
       props ? `<span class="badge" title="Envoys waiting at your court; they are heard at the end of the month">✉ ${props} envoy${props > 1 ? 's' : ''}</span>` : '',
@@ -295,11 +298,11 @@ const UI = (() => {
       nodes += far
         ? `<g class="${cls.join(' ')}" data-id="${P.id}" data-x="${P.x}" data-y="${P.y}" transform="translate(${P.x},${P.y}) scale(${ls})">
         <rect x="-46" y="-13" width="92" height="26" rx="5" fill="${color}"/>
-        <text class="pn" text-anchor="middle" y="5">${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
+        <text class="pn" text-anchor="middle" y="5">${S.battles && S.battles[P.id] ? '⚔ ' : ''}${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
       </g>`
         : `<g class="${cls.join(' ')}" data-id="${P.id}" data-x="${P.x}" data-y="${P.y}" transform="translate(${P.x},${P.y}) scale(${ls})">
         <rect x="-48" y="-21" width="96" height="42" rx="6" fill="${color}"/>
-        <text class="pn" text-anchor="middle" y="-4">${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
+        <text class="pn" text-anchor="middle" y="-4">${S.battles && S.battles[P.id] ? '<tspan class="battle-mark">⚔</tspan> ' : ''}${hasRuler ? '★ ' : ''}${esc(P.name)}</text>
         <text class="pt" text-anchor="middle" y="12">⚔ ${fmt(p.troops)}${officers ? `  ☗ ${officers}` : ''}</text>
       </g>`;
     }
@@ -525,6 +528,8 @@ const UI = (() => {
     const bar = (v, max) => `<div class="bar"><i style="width:${Math.min(100, (v / max) * 100)}%"></i></div>`;
 
     const meGuest = !S.observer && S.factions[S.player].guest;
+    const B = Game.battleFor(selected);
+    const nearBattle = !S.observer && p.owner === S.player && !B ? S.adj[selected].map((n) => Game.battleFor(n)).filter((x) => x && (x.attF === S.player || x.defF === S.player || (x.attF && Game.treatyStatus(S.player, x.attF) === 'alliance') || (x.defF && Game.treatyStatus(S.player, x.defF) === 'alliance'))) : [];
     let html = `${meGuest ? '<div class="hint"><a href="#" id="back-exile">◂ Back to your household in exile</a></div>' : ''}<div class="ph"><h2>${esc(P.name)}</h2><div class="owner"><span class="chip" style="background:${ownerColor}"></span>${esc(Game.fname(p.owner))}</div></div>${CITY_NOTES[P.id] ? `<div class="hint" style="font-style:italic">${esc(CITY_NOTES[P.id])}</div>` : ''}
       <div class="grid2">
         <div class="kv"><span>Troops</span><b>${fmt(p.troops)}</b></div>
@@ -540,6 +545,13 @@ const UI = (() => {
         <div class="kv"><span>Trade links</span><b title="Adjacent cities of your house or allies; each adds 8% income. A hostile border costs 10%.">${p.tradeLinks || 0}${p.hostileBorder ? ' · front' : ''}</b></div>
       </div>
       ${p.traits && p.traits.length ? `<div class="traits">${p.traits.map((t) => `<span class="trait" title="${esc(TRAIT_INFO[t].desc)}">${esc(TRAIT_INFO[t].label)}</span>`).join('')}</div>` : ''}`;
+    const idleHere = Game.idleOfficers(selected);
+    if (B) {
+      const ps = Game.playerSideOf(B);
+      html += `<div class="sec">Battle</div><div class="kv"><span>Besieged by</span><b>${esc(Game.fname(B.attF))}</b></div><div class="kv"><span>Day</span><b>${B.day} (day ${B.dayInMonth} of this month)</b></div><div class="kv"><span>In the field</span><b>${fmt(BATTLE.sideTroops(B, 'A'))} attackers · ${fmt(BATTLE.sideTroops(B, 'D'))} defenders</b></div>
+        <div class="cmds">${ps ? `<button class="wide btn-gold" data-cmd="openBattle">⚔ ${B.dayInMonth < 30 ? 'Fight the battle' : 'View the battle'}</button>` : `<button class="wide" data-cmd="openBattle">Watch the siege</button>`}</div>`;
+    }
+    if (nearBattle.length) html += `<div class="sec">Battles nearby</div><div class="cmds">${nearBattle.map((x) => `<button data-cmd="reinforce" data-target="${x.city}" ${!idleHere.length ? 'disabled' : ''}>Send help to ${esc(Game.pname(x.city))}</button>`).join('')}</div>`;
 
     const offs = p.owner ? Game.officersIn(selected, p.owner) : [];
     const gov = Game.governorOf(p);
@@ -817,6 +829,8 @@ const UI = (() => {
         return chooseOfficer('Build warships', `Spend ${Game.COST.ships} gold to launch ships (fleet max 100). Gain depends on <b>LDR</b> and <b>INT</b>. Fleets decide river crossings and sea lanes, for attack and defence.`, idle, (o) => `≈ +${Math.floor(o.ldr / 6 + o.int / 10 + 2)}`, (n) => result(Game.buildShips(pid, n)));
       case 'transfer': return transferDialog(pid);
       case 'attack': return attackDialog(pid, null);
+      case 'openBattle': return openBattle(pid);
+      case 'reinforce': return reinforceDialog(pid, data.target);
       case 'attackFrom': return attackDialog(data.from, pid);
     }
   }
@@ -959,6 +973,7 @@ const UI = (() => {
         if (!res.ok) { result(res); return; }
         closeModal();
         renderAll();
+        if (res.battle) { messengerDialog(res.battle, () => openBattle(res.battle)); return; }
         showBattle(res.report, () => handleCaptives(renderAll));
       },
     });
@@ -978,8 +993,9 @@ const UI = (() => {
         <div class="rounds">${R.lines.map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('')}</div>
         <div>Attackers: ${fmt(R.startA)} → ${fmt(R.endA)} &nbsp;·&nbsp; Defenders: ${fmt(R.startD)} → ${fmt(R.endD)}</div>
       </div>
-      <div class="modal-actions"><button class="btn btn-gold" data-act="close">Continue</button></div>`, {
+      <div class="modal-actions">${R.replay && R.replay.length ? '<button data-act="replay">▶ Watch the battle</button>' : ''}<button class="btn btn-gold" data-act="close">Continue</button></div>`, {
       close: () => { closeModal(); if (onClose) onClose(); },
+      replay: () => { closeModal(); openReplay(R, () => { if (onClose) onClose(); }); },
     }, true);
   }
 
@@ -1020,6 +1036,13 @@ const UI = (() => {
       return;
     }
     if (S.pendingCaptives.some((c) => c.captor === S.player)) { handleCaptives(endTurn); return; }
+    const unfought = Game.playerBattles().filter((B) => B.dayInMonth < 30);
+    if (unfought.length) {
+      const B = unfought[0];
+      openModal(`<h3>The battle of ${esc(Game.pname(B.city))} is not decided</h3><p>${30 - B.dayInMonth} days of the month remain to be fought. You may fight them now, or let your generals fight them for you before the month ends.</p>
+        <div class="modal-actions"><button data-act="cancel">Go back</button><button data-act="auto">Let the generals fight</button><button class="btn btn-gold" data-act="fight">⚔ Fight</button></div>`, { cancel: closeModal, fight: () => { closeModal(); openBattle(B.city); }, auto: () => { closeModal(); Game.battleAutoMonth(B.city); renderAll(); const S2 = Game.state(); const i = S2.notices.findIndex((n) => n.report && n.report.to === B.city); if (i >= 0) { const R = S2.notices.splice(i, 1)[0].report; showBattle(R, endTurn); } else endTurn(); } });
+      return;
+    }
     const F = S.factions[S.player];
     const idle = F.guest ? Game.factionOfficers(S.player).filter((o) => !o.acted && Game.prov(o.city).owner === F.host).length : Game.factionProvinces(S.player).reduce((s, p) => s + Game.idleOfficers(p.id).length, 0);
     const afterTurn = () => handleDecisions(() => handleTitle(() => handleSuccession(() => handleProposals(() => handleCaptives(renderAll)))));
@@ -1207,6 +1230,8 @@ const UI = (() => {
         <button data-act="load" ${Game.hasSave() ? '' : 'disabled'}>Quick load</button>
         ${[1, 2, 3].map((n) => { const info = Game.slotInfo(n); return `<button data-act="save${n}">Save slot ${n}${info ? '' : ' (empty)'}</button><button data-act="load${n}" ${info ? '' : 'disabled'} title="${info ? esc(info.label) : ''}">Load slot ${n}${info ? ': ' + esc(info.label) : ''}</button>`; }).join('')}
         <button class="wide" data-act="hist">${Game.getOption('historicalDeaths') ? '☑' : '☐'} Scripted historical deaths</button>
+        <button class="wide" data-act="tactical" title="Fight sieges day by day on the hex battlefield; off, battles resolve at once">${Game.tacticalOn() ? '☑' : '☐'} Tactical battles on the hex maps</button>
+        <button class="wide" data-act="watch" title="In observer mode, replay the AI's sieges day by day">${Game.getOption('watchBattles') ? '☑' : '☐'} Replay AI battles (observer)</button>
         <button class="wide btn-red" data-act="quit">Quit to title (unsaved progress is lost)</button>
       </div>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, {
@@ -1218,7 +1243,152 @@ const UI = (() => {
       load: () => { if (Game.load()) { selected = null; closeModal(); renderAll(); toast('Game loaded.'); } else { closeModal(); toast('Saved game is from an older map and cannot be loaded.'); } },
       quit: () => { closeModal(); backToMenu(); },
       hist: () => { Game.setOption('historicalDeaths', !Game.getOption('historicalDeaths')); renderLog(); showMenu(); },
+      tactical: () => { Game.setOption('tactical', !Game.tacticalOn()); renderLog(); showMenu(); },
+      watch: () => { Game.setOption('watchBattles', !Game.getOption('watchBattles')); renderLog(); showMenu(); },
     });
+  }
+
+
+  // ---------- the battle screen ----------
+  const BT = { city: null, sel: null, mode: null, replay: null, frame: 0, timer: null };
+  const BT_S = 26;
+  function initBattleScreen() {
+    $('#bt-close').addEventListener('click', closeBattle);
+    $('#bt-help').addEventListener('click', () => openModal(`<h3>Fighting a battle</h3>
+      <p class="hint">Each turn is a day. Click one of your units, then a green hex to march there (three movement points a day; hills, forest and streams cost two, marsh three, roads one), a red enemy to attack it, or a gold gate to set the ram against it. A barred gate falls after three days of ramming, or when its defenders break. Units on walls, gates and hills loose arrows two hexes away without reply. Casualties depend on strength, commanders, training, morale and the ground; a unit breaks when its morale or numbers fail, and its officers may be captured.</p>
+      <p class="hint">The attacker moves first each day. Both armies eat: the besiegers from the grain they brought, the garrison from the city. Messengers can be sent once for help; your own neighbouring cities and allies may march, arriving in one to ten days for the attacker and fifteen to twenty for the defender. If the month ends undecided the siege continues next month, and more men and grain can be sent from neighbouring cities in the normal turn. Taking the city's heart, or breaking every defender, wins it; the attacker may withdraw at any time.</p>
+      <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal }));
+    $('#bt-map').addEventListener('click', (e) => {
+      if (BT.replay) return;
+      const B = Game.battleFor(BT.city); if (!B) return;
+      const tok = e.target.closest('[data-unit]');
+      if (tok) {
+        const u = B.units.find((x) => x.id === +tok.dataset.unit); if (!u) return;
+        if (u.side === Game.playerSideOf(B)) { BT.sel = u.id; BT.mode = null; renderBattle(); return; }
+        if (BT.sel) { const r = Game.battleAttack(BT.city, BT.sel, u.id); if (!r.ok) toast(r.msg); afterBattleAction(); }
+        return;
+      }
+      const hl = e.target.closest('.hl');
+      if (hl && BT.sel) {
+        const c = +hl.dataset.c, r = +hl.dataset.r;
+        const res = hl.classList.contains('ram') ? Game.battleRam(BT.city, BT.sel, c, r) : Game.battleMove(BT.city, BT.sel, c, r);
+        if (!res.ok) toast(res.msg); afterBattleAction();
+      }
+    });
+    $('#bt-actions').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return; const act = b.dataset.act;
+      if (BT.replay) { replayControl(act); return; }
+      const B = Game.battleFor(BT.city); if (!B) { closeBattle(); return; }
+      if (act === 'end') { Game.battleEndDay(BT.city); afterBattleAction(true); }
+      else if (act === 'auto') { Game.battleEndDay(BT.city, true); afterBattleAction(true); }
+      else if (act === 'month') { Game.battleAutoMonth(BT.city); afterBattleAction(true); }
+      else if (act === 'msg') messengerDialog(BT.city, renderBattle);
+      else if (act === 'withdraw') openModal(`<h3>Withdraw?</h3><p>${Game.playerSideOf(B) === 'A' ? 'The siege is abandoned and the army marches home with what it has.' : 'The garrison slips away by night and the city is lost.'}</p><div class="modal-actions"><button data-act="cancel">Stay</button><button class="btn btn-red" data-act="ok">Withdraw</button></div>`, { cancel: closeModal, ok: () => { closeModal(); Game.battleWithdraw(BT.city); afterBattleAction(true); } });
+    });
+  }
+  function afterBattleAction(dayEnded = false) {
+    const B = Game.battleFor(BT.city);
+    if (!B) {   // the battle ended: show the report
+      const S = Game.state(); const i = S.notices.findIndex((x) => x.report && x.report.to === BT.city); const n = i >= 0 ? S.notices.splice(i, 1)[0] : null;
+      closeBattle(); renderAll();
+      if (n) showBattle(n.report, () => handleCaptives(renderAll)); else handleCaptives(renderAll);
+      return;
+    }
+    if (dayEnded && B.dayInMonth < 30) Game.battleBeginDay(BT.city);
+    if (!Game.battleFor(BT.city)) { afterBattleAction(); return; }
+    renderBattle();
+  }
+  function openBattle(city) {
+    const B = Game.battleFor(city); if (!B) return;
+    BT.city = city; BT.sel = null; BT.mode = null; BT.replay = null;
+    if (Game.playerSideOf(B) && B.phase !== 'player' && !B.over && B.dayInMonth < 30) Game.battleBeginDay(city);
+    if (!Game.battleFor(city)) { afterBattleAction(); return; }
+    $('#battle-screen').hidden = false;
+    renderBattle();
+  }
+  function closeBattle() { if (BT.timer) clearInterval(BT.timer); BT.timer = null; $('#battle-screen').hidden = true; BT.city = null; BT.replay = null; renderAll(); }
+  const unitColor = (fid) => (fid && Game.state().factions[fid] ? Game.state().factions[fid].color : FREE_COLOR);
+  function renderBattle() {
+    const S = Game.state(); const B = Game.battleFor(BT.city); if (!B) return;
+    const ps = Game.playerSideOf(B); const m = HEXMAPS[B.city];
+    const ownerOf = (id) => { const o = S.provinces[id] && S.provinces[id].owner; return o && S.factions[o] ? S.factions[o] : null; };
+    const { svg, W, H } = HEXVIEW.render(B.city, BT_S, true, { tints: true, coords: false, ownerOf, ownerColor: (id) => { const f = ownerOf(id); return f ? f.color : FREE_COLOR; } });
+    let extra = '';
+    const sel = BT.sel ? B.units.find((u) => u.id === BT.sel) : null;
+    if (sel && sel.side === ps && B.phase === 'player') {
+      extra += HEXVIEW.highlightSvg(BATTLE.canReach(B, sel).map((d) => [d.c, d.r]), BT_S, 'move');
+      if (!sel.acted) { extra += HEXVIEW.highlightSvg(BATTLE.targetsFor(B, sel).map((v) => [v.c, v.r]), BT_S, 'attack'); extra += HEXVIEW.highlightSvg(BATTLE.rammableFor(B, sel), BT_S, 'ram'); }
+    }
+    // broken gates
+    for (const [k, hits] of Object.entries(B.gates)) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
+    const units = B.units.map((u) => ({ ...u, color: unitColor(u.fid) }));
+    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + extra + HEXVIEW.unitsSvg(units, BT_S, BT.sel);
+    $('#bt-title').textContent = `The siege of ${Game.pname(B.city)}`;
+    $('#bt-day').textContent = `Day ${B.day}${B.dayInMonth ? ` · day ${B.dayInMonth} of the month` : ''}${B.over ? ' · decided' : B.phase === 'player' ? ' · your orders' : ''}`;
+    const eatA = Math.ceil(BATTLE.sideTroops(B, 'A') * BATTLE.FOOD_PER_MAN_DAY);
+    $('#bt-food').textContent = `Besiegers' grain ${fmt(Math.floor(B.att.food))} (${eatA ? Math.floor(B.att.food / eatA) : '∞'} days) · city granary ${fmt(S.provinces[B.city].food)}`;
+    const sideRow = (side, name) => { const us = BATTLE.sideUnits(B, side); const arriving = B.arrivals.filter((a) => a.side === side && !a.done); return `<div class="side"><span><span class="chip" style="background:${unitColor(side === 'A' ? B.attF : B.defF)}"></span> ${esc(name)}${ps === side ? ' (you)' : ''}</span><b>${us.length} units · ${fmt(BATTLE.sideTroops(B, side))}${arriving.length ? ` · +${fmt(arriving.reduce((a, x) => a + x.troops, 0))} coming (day ${Math.min(...arriving.map((x) => x.day))})` : ''}</b></div>`; };
+    $('#bt-sides').innerHTML = sideRow('A', Game.fname(B.attF)) + sideRow('D', B.defF ? Game.fname(B.defF) : 'the town militia');
+    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? esc(sel.officers.join(', ')) : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
+    else $('#bt-unit').innerHTML = `<div class="hint">${ps ? (B.phase === 'player' ? 'Click one of your units to give it orders.' : 'The day is done; end it to continue.') : 'You are watching this siege.'}</div>`;
+    const canAct = ps && !B.over && B.dayInMonth < 30;
+    $('#bt-actions').innerHTML = ps ? `
+      <button class="btn-gold" data-act="end" ${canAct ? '' : 'disabled'}>End day ▶</button>
+      <button data-act="auto" ${canAct ? '' : 'disabled'} title="Your generals give the orders for this day">Auto day</button>
+      <button data-act="month" ${canAct ? '' : 'disabled'} title="Your generals fight the rest of the month">Auto to month's end</button>
+      <button data-act="msg" ${!B.over && !B[ps === 'A' ? 'att' : 'def'].asked ? '' : 'disabled'} title="Ask neighbouring cities and allies for help">✉ Messengers</button>
+      <button class="wide btn-red" data-act="withdraw" ${B.over ? 'disabled' : ''}>Withdraw</button>${B.dayInMonth >= 30 && !B.over ? '<div class="hint wide" style="grid-column:span 2">The month\\u2019s thirty days are fought. End the month on the map; the siege continues next month.</div>' : ''}` : `<div class="hint" style="grid-column:span 2">An AI siege in progress; it is fought out when the month ends.</div>`;
+    const byDay = {}; for (const l of B.log.slice(-160)) (byDay[l.day] = byDay[l.day] || []).push(l);
+    $('#bt-log').innerHTML = Object.keys(byDay).sort((a, b) => b - a).map((d) => `<div class="day-head">Day ${d}</div>` + byDay[d].map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('')).join('');
+  }
+  // ask for help: own neighbours with amounts, allies yes/no
+  function messengerDialog(city, done) {
+    const req = Game.battleRequests(city); if (!req || req.asked || (!req.own.length && !req.allies.length)) { if (done) done(); return; }
+    openModal(`<h3>Send for help</h3><p class="hint">Messengers may ride once. Your own cities next to ${esc(Game.pname(city))} can send men and grain, arriving in ${req.days} days; allied lords nearby may answer or not.</p>
+      ${req.own.map((o, i) => `<div class="kv" style="align-items:center;gap:8px"><span>${esc(Game.pname(o.city))} <small class="hint">(${fmt(o.troops)} men, ${fmt(o.spare)} spare, ${fmt(o.food)} food)</small></span><b><input type="number" id="mg-t${i}" min="0" max="${o.troops}" value="${Math.min(o.spare, Math.floor(o.troops * 0.5))}" style="width:80px"> men <input type="number" id="mg-f${i}" min="0" max="${o.food}" value="${Math.min(o.food, 3000)}" style="width:80px"> food <select id="mg-o${i}">${o.officers.length ? o.officers.map((n) => `<option>${esc(n)}</option>`).join('') : '<option value="">no idle officer</option>'}</select></b></div>`).join('')}
+      ${req.allies.map((a, i) => `<label class="kv" style="cursor:pointer"><span><input type="checkbox" id="mg-a${i}" checked> Ask ${esc(Game.fname(a.fid))} at ${esc(Game.pname(a.city))} <small class="hint">(${fmt(a.troops)} men, relations ${a.relation})</small></span></label>`).join('')}
+      <div class="modal-actions"><button data-act="skip">No messengers</button><button class="btn btn-gold" data-act="send">Send</button></div>`, {
+      skip: () => { closeModal(); if (done) done(); },
+      send: () => { const own = req.own.map((o, i) => ({ city: o.city, troops: +$(`#mg-t${i}`).value, food: +$(`#mg-f${i}`).value, officer: $(`#mg-o${i}`).value })).filter((x) => x.officer && x.troops > 0); const allies = req.allies.filter((a, i) => $(`#mg-a${i}`).checked).map((a) => a.fid); const r = Game.battleMessengers(city, { own, allies }); closeModal(); toast(r.msg); if (done) done(); },
+    });
+  }
+  // from a neighbouring city during the month: men and grain for a battle nearby
+  function reinforceDialog(fromId, city) {
+    const S = Game.state(); const p = Game.prov(fromId); const idle = Game.idleOfficers(fromId).filter((o) => !Game.isRuler(o));
+    openModal(`<h3>Send help to ${esc(Game.pname(city))}</h3><p class="hint">A column from ${esc(Game.pname(fromId))} reaches the battle within ten days. An officer must lead troops; grain may go alone.</p>
+      <div class="kv"><span>Troops (${fmt(p.troops)} here)</span><b><input type="number" id="rf-t" min="0" max="${p.troops}" value="${Math.floor(p.troops * 0.5)}" style="width:100px"></b></div>
+      <div class="kv"><span>Food (${fmt(p.food)} here)</span><b><input type="number" id="rf-f" min="0" max="${p.food}" value="${Math.min(p.food, 5000)}" style="width:100px"></b></div>
+      <div class="kv"><span>Officer</span><b><select id="rf-o">${idle.map((o) => `<option>${esc(o.name)}</option>`).join('')}<option value="">none (grain only)</option></select></b></div>
+      <div class="modal-actions"><button data-act="cancel">Cancel</button><button class="btn btn-gold" data-act="ok">Send</button></div>`, {
+      cancel: closeModal,
+      ok: () => { const o = $('#rf-o').value; const r = Game.reinforceBattle(fromId, city, { troops: o ? +$('#rf-t').value : 0, food: +$('#rf-f').value, officers: o ? [o] : [] }); closeModal(); result(r); },
+    });
+  }
+  // replay of an AI battle, frame by frame
+  function openReplay(R, done) {
+    BT.city = R.city; BT.replay = R; BT.frame = 0; BT.sel = null; BT.onDone = done;
+    $('#battle-screen').hidden = false; renderReplay();
+    BT.timer = setInterval(() => { if (BT.frame < R.replay.length - 1) { BT.frame++; renderReplay(); } else { clearInterval(BT.timer); BT.timer = null; renderReplay(); } }, 700);
+  }
+  function replayControl(act) {
+    const R = BT.replay; if (!R) return;
+    if (act === 'prev') BT.frame = Math.max(0, BT.frame - 1);
+    else if (act === 'next') BT.frame = Math.min(R.replay.length - 1, BT.frame + 1);
+    else if (act === 'play') { if (BT.timer) { clearInterval(BT.timer); BT.timer = null; } else BT.timer = setInterval(() => { if (BT.frame < R.replay.length - 1) { BT.frame++; renderReplay(); } else { clearInterval(BT.timer); BT.timer = null; renderReplay(); } }, 700); }
+    else if (act === 'done') { const d = BT.onDone; closeBattle(); if (d) d(); return; }
+    renderReplay();
+  }
+  function renderReplay() {
+    const R = BT.replay; const S = Game.state(); const f = R.replay[BT.frame]; if (!f) return;
+    const ownerOf = (id) => { const o = S.provinces[id] && S.provinces[id].owner; return o && S.factions[o] ? S.factions[o] : null; };
+    const { svg, W, H } = HEXVIEW.render(R.city, BT_S, true, { tints: true, ownerOf, ownerColor: (id) => { const o = ownerOf(id); return o ? o.color : FREE_COLOR; } });
+    let extra = ''; for (const [k, hits] of Object.entries(f.gates || {})) if (hits >= BATTLE.GATE_HITS) { const [c, r] = k.split(',').map(Number); const [cx, cy] = HEXVIEW.centre(c, r, BT_S); extra += `<text class="glyph" x="${cx}" y="${cy + 4}" text-anchor="middle" style="font-size:11px;fill:#ff8a7a">✕</text>`; }
+    const pad = 96; const el = $('#bt-map'); el.setAttribute('viewBox', `${-pad} ${-40} ${W + 2 * pad} ${H + 80}`); el.innerHTML = svg + extra + HEXVIEW.unitsSvg(f.units.map((u) => ({ ...u, color: unitColor(u.fid) })), BT_S, null);
+    $('#bt-title').textContent = `The siege of ${Game.pname(R.city)} (replay)`; $('#bt-day').textContent = `Day ${f.day} of ${R.replay[R.replay.length - 1].day}`; $('#bt-food').textContent = '';
+    $('#bt-sides').innerHTML = `<div class="side"><span><span class="chip" style="background:${unitColor(R.attacker)}"></span> ${esc(Game.fname(R.attacker))}</span><b>${fmt(f.units.filter((u) => u.side === 'A').reduce((a, u) => a + u.troops, 0))}</b></div><div class="side"><span><span class="chip" style="background:${unitColor(R.defender)}"></span> ${R.defender ? esc(Game.fname(R.defender)) : 'the town'}</span><b>${fmt(f.units.filter((u) => u.side === 'D').reduce((a, u) => a + u.troops, 0))}</b></div>`;
+    $('#bt-unit').innerHTML = `<div class="hint">${esc(R.lines[R.lines.length - 1] ? R.lines[R.lines.length - 1].text : '')}</div>`;
+    $('#bt-actions').innerHTML = `<button data-act="prev">◂ Day</button><button data-act="next">Day ▸</button><button data-act="play">${BT.timer ? '❚❚ Pause' : '▶ Play'}</button><button class="btn-gold" data-act="done">Done</button>`;
+    $('#bt-log').innerHTML = (f.log || []).map((t) => `<div>${esc(t)}</div>`).join('') || '<div class="hint">A quiet day.</div>';
   }
 
   // ---------- diplomacy ----------
