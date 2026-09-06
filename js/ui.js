@@ -80,6 +80,7 @@ const UI = (() => {
     $('#more-menu').addEventListener('click', () => toggleMore(false));
     document.addEventListener('click', (e) => { if (!e.target.closest('.tb-actions')) toggleMore(false); });
     $('#btn-legend').addEventListener('click', () => setLegend(!showLegend));
+    $('#btn-hexmaps').addEventListener('click', () => { Game.save(); window.open('hexmaps.html' + (selected ? '#' + selected : ''), '_blank'); });
     $('#toggle-legend').addEventListener('click', () => setLegend(!showLegend));
     $('#btn-cinema').addEventListener('click', toggleCinema);
     $('#cinema-exit').addEventListener('click', toggleCinema);
