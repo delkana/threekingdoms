@@ -90,6 +90,29 @@ test('tactical battle: sieges resolve within four months and reach the map; play
   G.Game.save(); assert(G.Game.load() && G.Game.state().battles.xuchang, 'battle survives save and load');
   assert(G.Game.battleAutoMonth('xuchang').ok, 'auto month');
 });
+test('champions, letters, ransom and favours: duels and defections happen in sieges; favours are owed and repaid', () => {
+  let duels = 0, letters = 0, lines = 0;
+  for (let i = 0; i < 6; i++) {
+    G.Game.newGame(null); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 200000; S.provinces.chenliu.gold = 3000; S.provinces.xuchang.owner = 'yuanshu'; S.provinces.xuchang.troops = 12000; S.provinces.xuchang.gold = 3000;
+    const ys = G.Game.factionOfficers('yuanshu').filter((o) => !G.Game.isRuler(o)).slice(0, 3); for (const o of ys) { o.city = 'xuchang'; o.acted = false; o.loyalty = 50; }
+    for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+    const r = G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren', 'Xun Yu'], 25000); assert(r.ok && r.report, 'battle');
+    for (const l of r.report.lines) { lines++; if (/crosses arms|declines/.test(l.text)) duels++; if (/letters/.test(l.text)) letters++; }
+  }
+  assert(duels >= 2, `duels or challenges ${duels} in ${lines} lines`); assert(letters >= 1, `letters ${letters}`);
+  // favours: an ally who marches is owed one; a gift of 400 repays it
+  G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 99999; S.provinces.xuchang.owner = 'yuanshu'; S.provinces.xuchang.troops = 9000; S.provinces.runan.owner = 'sunjian'; S.provinces.runan.troops = 20000;
+  const sj = G.Game.factionOfficers('sunjian').filter((o) => !G.Game.isRuler(o)).slice(0, 2); for (const o of sj) { o.city = 'runan'; o.acted = false; }
+  S.diplomacy['caocao|sunjian'] = { status: 'alliance', until: S.turn + 60, rel: 80 };
+  for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+  assert(G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren'], 21000).ok, 'player battle');
+  let got = false; for (let i = 0; i < 30 && !got; i++) { S.battles.xuchang.att.asked = false; for (const o of sj) o.acted = false; if (/from Sun Jian/.test(G.Game.battleMessengers('xuchang', { own: [], allies: ['sunjian'] }).msg)) got = true; }
+  assert(got && G.Game.favorsOwed('caocao', 'sunjian') === 1, 'favour owed after aid');
+  S.provinces.chenliu.gold = 1000; assert(G.Game.sendGift('caocao', 'sunjian', 'chenliu', 400).ok && G.Game.favorsOwed('caocao', 'sunjian') === 0, 'gift repays the favour');
+  assert(G.Game.sendGift('caocao', 'sunjian', 'chenliu', 0, 2000).ok, 'a gift of food');
+  // ransom price and the loyalty gate on recruitment
+  const o = G.Game.off('Ji Ling'); assert(G.Game.ransomPrice(o) > 300, 'ransom price'); o.loyalty = 95; assert(G.Game.captiveChance('caocao', o) === 0, 'a loyal man of a living house cannot be recruited'); o.loyalty = 40; assert(G.Game.captiveChance('caocao', o) > 0, 'a wavering one can');
+});
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();
   S.diplomacy['caocao|yuanshao'] = { rel: 0, status: 'ceasefire', until: 99, cooldown: 0 };

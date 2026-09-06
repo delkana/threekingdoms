@@ -140,7 +140,7 @@ const BATTLE = (() => {
 
   function bestStat(u, offs, k, fallback) { return offs.length ? Math.max(...offs.map((o) => o[k])) : fallback; }
   function strength(B, u, ctx) {
-    const offs = u.officers.map((n) => ctx.officer(n)).filter(Boolean);
+    const offs = u.officers.map((n) => ctx.officer(n)).filter((o) => o && !(B.wounded && B.wounded[o.name]));
     const war = bestStat(u, offs, 'war', 40), ldr = bestStat(u, offs, 'ldr', 40);
     return u.troops * (0.5 + war / 100) * (0.7 + ldr / 250) * (0.7 + u.training / 300) * (0.6 + 0.4 * u.morale / 100);
   }
@@ -153,7 +153,7 @@ const BATTLE = (() => {
   const sideUnits = (B, side) => B.units.filter((u) => u.side === side);
   const sidePower = (B, side, ctx) => sideUnits(B, side).reduce((a, u) => a + strength(B, u, ctx), 0);
   const sideTroops = (B, side) => sideUnits(B, side).reduce((a, u) => a + u.troops, 0);
-  const label = (u, ctx) => (u.officers.length ? `${u.officers[0]}'s ${u.side === 'A' ? 'column' : 'men'}` : ctx && ctx.fname && u.fid ? `an unled column of ${ctx.fname(u.fid)}` : u.side === 'A' ? 'an unled attacking column' : 'unled men of the garrison');
+  const label = (u, ctx) => (u.officers.length ? `${u.officers[0]}'s column` : ctx && ctx.fname && u.fid ? `an unled column of ${ctx.fname(u.fid)}` : u.side === 'A' ? 'an unled attacking column' : 'unled men of the garrison');
   const PLACE = { G: 'at the gate', W: 'on the walls', C: 'in the city', h: 'on the hills', m: 'in the mountains', f: 'in the woods', w: 'in the marsh', a: 'in the fields', s: 'by the stream', r: 'at the river' };
   const place = (B, c, r) => PLACE[terrainAt(B, c, r)] || 'on the plain';
   function log(B, text, cls = '') { B.log.push({ day: B.day, text, cls }); if (B.log.length > 400) B.log.shift(); }
@@ -164,7 +164,9 @@ const BATTLE = (() => {
     const fled = Math.floor(u.troops * 0.5);
     B[u.side === 'A' ? 'att' : 'def'].fled += fled;
     for (const n of u.officers) {
-      if (Math.random() < 0.6) { log(B, `${n} escapes the rout.`); continue; }
+      const r = Math.random();
+      if (r < 0.04 && !(ctx && ctx.guarded && ctx.guarded(n))) { log(B, `${n} falls in the rout!`, 'bad'); if (ctx && ctx.kill) ctx.kill(n, `killed in the rout before ${ctx.pname(B.city)}`); continue; }
+      if (r < 0.65) { log(B, `${n} escapes the rout.`); continue; }
       B.captives.push({ name: n, by: u.side === 'A' ? 'D' : 'A' }); log(B, `${n} is taken prisoner!`, 'bad');
     }
     for (const f of B.units) if (f.side === u.side && hexDist(f.c, f.r, u.c, u.r) <= 1) f.morale = Math.max(0, f.morale - 6);
@@ -189,6 +191,101 @@ const BATTLE = (() => {
     if (u.troops <= u.max * 0.12 || u.morale < 15) breakUnit(B, u, u.troops <= u.max * 0.12 ? 'is destroyed' : 'breaks and flees', ctx);
   }
 
+  // ---- single combat ----
+  // the champion of a unit: its best fighter still on his feet
+  const champion = (B, u, ctx) => u.officers.map((n) => ctx.officer(n)).filter((o) => o && !(B.wounded && B.wounded[o.name])).sort((a, b) => b.war - a.war)[0] || null;
+  function duel(B, u, v, ctx) {
+    const a = champion(B, u, ctx), d = champion(B, v, ctx); if (!a || !d) return null;
+    B.wounded = B.wounded || {};
+    const bonus = (o) => (ctx.duelBonus ? ctx.duelBonus(o.name) : 0);
+    const pA = Math.min(0.95, Math.max(0.05, Math.pow(a.war, 3) / (Math.pow(a.war, 3) + Math.pow(d.war, 3)) + bonus(a) - bonus(d)));
+    const bouts = ri(3, 60); const aWins = Math.random() < pA; const w = aWins ? a : d, l = aWins ? d : a; const wu = aWins ? u : v, lu = aWins ? v : u;
+    log(B, `${a.name} rides out and crosses arms with ${d.name}! After ${bouts} bout${bouts > 1 ? 's' : ''} ${w.name} ${['unhorses', 'drives back', 'wounds', 'overcomes'][ri(0, 3)]} ${l.name}.`, 'duel');
+    wu.morale = Math.min(100, wu.morale + 12); lu.morale = Math.max(0, lu.morale - 15);
+    for (const f of B.units) { if (f === wu || f === lu) continue; if (f.side === wu.side && hexDist(f.c, f.r, wu.c, wu.r) <= 2) f.morale = Math.min(100, f.morale + 4); if (f.side === lu.side && hexDist(f.c, f.r, lu.c, lu.r) <= 2) f.morale = Math.max(0, f.morale - 5); }
+    const r = Math.random();
+    if (r < 0.10 && !(ctx.guarded && ctx.guarded(l.name))) { lu.officers = lu.officers.filter((n) => n !== l.name); log(B, `${l.name} is slain in the duel!`, 'bad'); if (ctx.kill) ctx.kill(l.name, `slain in single combat by ${w.name}`); }
+    else if (r < 0.28) { lu.officers = lu.officers.filter((n) => n !== l.name); B.captives.push({ name: l.name, by: wu.side }); log(B, `${l.name} is dragged from the saddle and taken prisoner!`, 'bad'); }
+    else { B.wounded[l.name] = true; log(B, `${l.name} is wounded and carried back to his lines; he fights no more in this battle.`, lu.side === 'A' ? 'def' : 'att'); }
+    B.duels = (B.duels || 0) + 1; B.lastBlood = B.day;
+    if (lu.morale < 15 && B.units.includes(lu)) breakUnit(B, lu, 'breaks and flees', ctx);
+    return { winner: w.name, loser: l.name, aWins };
+  }
+  // a challenge may be issued by an unacted unit beside an enemy, once per pair per day, when both have a champion
+  const canChallenge = (B, u, v, ctx) => !u.acted && u.side !== v.side && hexDist(u.c, u.r, v.c, v.r) === 1 && !!champion(B, u, ctx) && !!champion(B, v, ctx) && !(B.duelsToday && B.duelsToday[u.id + ':' + v.id]);
+  // the AI takes up a challenge when its champion is nearly a match, and issues one when its champion is a match and then some
+  const aiAcceptsDuel = (B, u, v, ctx) => { const a = champion(B, u, ctx), d = champion(B, v, ctx); return !!(a && d && (d.war >= a.war - 12 || Math.random() < 0.15)); };
+  const wantsChallenge = (B, u, v, ctx) => { const a = champion(B, u, ctx), d = champion(B, v, ctx); return !!(a && d && a.war >= 70 && d.war >= 50 && a.war >= d.war - 5 && Math.random() < 0.15); };
+  function declineDuel(B, u, v, ctx) {
+    const a = champion(B, u, ctx), d = champion(B, v, ctx);
+    v.morale = Math.max(0, v.morale - 6); u.morale = Math.min(100, u.morale + 4);
+    log(B, `${a.name} rides out and calls for ${d.name}; ${d.name} declines, and the ${v.side === 'D' ? 'garrison' : 'besiegers'} mutter at it.`, u.side === 'A' ? 'att' : 'def');
+  }
+  // the challenger's side decides at once when the challenged side is the AI; a player must answer from the battle screen
+  function challengeNow(B, u, v, ctx) {
+    B.duelsToday = B.duelsToday || {}; B.duelsToday[u.id + ':' + v.id] = true;
+    if (aiAcceptsDuel(B, u, v, ctx)) duel(B, u, v, ctx); else declineDuel(B, u, v, ctx);
+  }
+  function melee(B, u, v, ctx) {
+    if (canChallenge(B, u, v, ctx) && wantsChallenge(B, u, v, ctx)) {
+      B.duelsToday = B.duelsToday || {}; B.duelsToday[u.id + ':' + v.id] = true;
+      if ((v.side === 'A' ? B.att : B.def).control === 'player') { B.pendingChallenge = { u: u.id, v: v.id }; u.acted = true; return; }
+      if (aiAcceptsDuel(B, u, v, ctx)) { duel(B, u, v, ctx); if (!B.units.includes(u) || !B.units.includes(v)) return; } else declineDuel(B, u, v, ctx);
+    }
+    fight(B, u, v, ctx);
+  }
+  // the player's answer to an AI challenge; the deferred attack then goes ahead
+  function answerChallenge(B, accept, ctx) {
+    const pc = B.pendingChallenge; if (!pc) return false; B.pendingChallenge = null;
+    const u = B.units.find((x) => x.id === pc.u), v = B.units.find((x) => x.id === pc.v); if (!u || !v) return false;
+    u.acted = false;
+    if (accept) { duel(B, u, v, ctx); if (!B.units.includes(u) || !B.units.includes(v)) { u.acted = true; return true; } } else declineDuel(B, u, v, ctx);
+    fight(B, u, v, ctx); return true;
+  }
+  const autoAnswer = (B, ctx) => { const pc = B.pendingChallenge; if (!pc) return false; const u = B.units.find((x) => x.id === pc.u), v = B.units.find((x) => x.id === pc.v); return !!(u && v && aiAcceptsDuel(B, u, v, ctx)); };
+
+  // ---- turning an enemy officer in the field ----
+  // the cleverest officer on the field writes the letters; a wavering officer may cross over, and a commander brings his unit with him
+  const envoyOf = (B, side, ctx) => sideUnits(B, side).flatMap((u) => u.officers.map((n) => ctx.officer(n))).filter((o) => o && !(B.wounded && B.wounded[o.name])).sort((a, b) => b.int - a.int)[0] || null;
+  function subornChance(B, side, v, o, gold, ctx) {
+    const envoy = envoyOf(B, side, ctx); if (!envoy) return 0;
+    const losing = sidePower(B, v.side, ctx) < sidePower(B, side, ctx) * 0.8;
+    let c = 0.05 + (70 - o.loyalty) / 100 + (envoy.int - 60) / 300 + gold / 4000 + (losing ? 0.15 : 0) + (v.morale < 50 ? 0.1 : 0) + (o.loyalty < 40 ? 0.1 : 0);
+    if (o.loyalty >= 70) c = Math.min(c, 0.05);
+    return Math.max(0, Math.min(0.8, c));
+  }
+  function subornTargets(B, side, ctx) {
+    const enemy = side === 'A' ? 'D' : 'A'; const fid = side === 'A' ? B.attF : B.defF; const out = [];
+    if (!ctx.canDefect || !envoyOf(B, side, ctx)) return out;
+    for (const v of sideUnits(B, enemy)) for (const n of v.officers) { const o = ctx.officer(n); if (!o || (B.suborned && B.suborned[n]) || !ctx.canDefect(n, fid)) continue; out.push({ unit: v.id, name: n, loyalty: o.loyalty, lead: v.officers[0] === n, troops: v.troops, chance: subornChance(B, side, v, o, 0, ctx) }); }
+    return out.sort((a, b) => b.chance - a.chance);
+  }
+  function suborn(B, side, unitId, name, gold, ctx) {
+    const v = B.units.find((x) => x.id === unitId); const o = v && ctx.officer(name);
+    if (!v || !o || !v.officers.includes(name) || v.side === side) return { ok: false, msg: 'No such officer on the field.' };
+    B.suborned = B.suborned || {}; if (B.suborned[name]) return { ok: false, msg: `${name} has already been approached.` };
+    const fid = side === 'A' ? B.attF : B.defF; if (!ctx.canDefect || !ctx.canDefect(name, fid)) return { ok: false, msg: `${name} would never turn.` };
+    const envoy = envoyOf(B, side, ctx); if (!envoy) return { ok: false, msg: 'No officer of yours is on the field to write the letters.' };
+    if (gold > 0 && !ctx.spendGold(side, gold)) return { ok: false, msg: 'Not enough gold.' };
+    B.suborned[name] = true; const chance = subornChance(B, side, v, o, gold, ctx);
+    if (Math.random() < chance) {
+      const lead = v.officers[0] === name; const enemy = v.side;
+      if (lead) {
+        const others = v.officers.filter((n) => n !== name); v.officers = [name];
+        v.side = side; v.fid = fid; v.acted = true; v.mp = 0; v.morale = Math.max(40, v.morale - 10); v.max = v.troops;
+        for (const n of others) { const home = sideUnits(B, enemy)[0]; if (home) { home.officers.push(n); log(B, `${n} refuses to follow and rides to ${home.officers[0] || 'the nearest'} unit.`); } else log(B, `${n} refuses to follow and slips away.`); }
+      } else { v.officers = v.officers.filter((n) => n !== name); const eu = sideUnits(B, side).find((x) => x.officers.includes(envoy.name)) || sideUnits(B, side)[0]; if (eu) eu.officers.push(name); }
+      ctx.defect(name, fid);
+      for (const f of sideUnits(B, enemy)) f.morale = Math.max(0, f.morale - 6);
+      const msg = lead ? `${name} goes over to ${ctx.fname(fid)} with ${v.troops.toLocaleString()} men!` : `${name} slips across the lines to ${ctx.fname(fid)}!`;
+      log(B, `${envoy.name}'s letters find their mark: ${msg}`, side === 'A' ? 'att' : 'def'); B.lastBlood = B.day;
+      return { ok: true, turned: true, msg };
+    }
+    if (ctx.raiseLoyalty) ctx.raiseLoyalty(name, 5);
+    log(B, `${name} spurns ${envoy.name}'s letters${gold ? ' and keeps the gold' : ''}.`, '');
+    return { ok: true, turned: false, msg: `${name} spurns the offer${gold ? ' and keeps the gold' : ''}.` };
+  }
+
   // ---- player and AI actions ----
   function moveUnit(B, u, c, r) {
     const d = reach(B, u, u.mp)[key(c, r)]; if (!d || d.cost === 0) return false;
@@ -203,10 +300,10 @@ const BATTLE = (() => {
     return true;
   }
   const rammableFor = (B, u) => { const m = HEXMAPS[B.city]; return neighbours(u.c, u.r, m.w, m.h).filter(([c, r]) => terrainAt(B, c, r) === 'G' && !unitAt(B, c, r) && !gateOpen(B, c, r)); };
-  function attackUnit(B, u, v, ctx) {
+  function attackUnit(B, u, v, ctx, opts = {}) {
     if (u.acted || u.side === v.side) return false;
     const dist = hexDist(u.c, u.r, v.c, v.r);
-    if (dist === 1) { fight(B, u, v, ctx); return true; }
+    if (dist === 1) { if (opts.duel && canChallenge(B, u, v, ctx)) { challengeNow(B, u, v, ctx); if (!B.units.includes(u) || !B.units.includes(v) || u.acted) return true; } fight(B, u, v, ctx); return true; }
     if (dist <= VOLLEY_RANGE && 'WGh'.includes(terrainAt(B, u.c, u.r))) { fight(B, u, v, ctx, true); return true; }
     return false;
   }
@@ -245,24 +342,26 @@ const BATTLE = (() => {
           if (threatened.length && hexDist(u.c, u.r, threatened[0][0], threatened[0][1]) <= 2 && !mine.some((o) => o !== u && hexDist(o.c, o.r, threatened[0][0], threatened[0][1]) < hexDist(u.c, u.r, threatened[0][0], threatened[0][1]))) { const step = stepToward(B, u, [key(threatened[0][0], threatened[0][1])]); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); } }
         }
         if (targets.length && !attackable.length) { fight(B, u, targets[0], ctx, true); continue; }   // volley from the walls
-        if (attackable.length && (worth(attackable[0]) || !insideWalls(t))) { fight(B, u, attackable[0], ctx); continue; }
+        if (attackable.length && (worth(attackable[0]) || !insideWalls(t))) { melee(B, u, attackable[0], ctx); continue; }
         if (!insideWalls(t)) { const goal = stepToward(B, u, gates.concat([centre]).filter((k) => !unitAt(B, +k.split(',')[0], +k.split(',')[1]))); if (goal) { const [c, r] = goal.split(',').map(Number); moveUnit(B, u, c, r); } }
         continue;
       }
       // attacker
       const stalled = B.day - (B.lastBlood || 0) > 14;   // a fortnight without a fight: no more waiting
       const assault = ratio >= 0.9 || foodDays < 4 || ((!pending || stalled) && ratio >= 0.6);
-      if (!assault) { if (attackable.length && worth(attackable[0])) fight(B, u, attackable[0], ctx); continue; }   // wait for the reinforcements
-      if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G')) { fight(B, u, attackable[0], ctx); continue; }
+      if (!assault) { if (attackable.length && worth(attackable[0])) melee(B, u, attackable[0], ctx); continue; }   // wait for the reinforcements
+      if (attackable.length && (worth(attackable[0]) || terrainAt(B, attackable[0].c, attackable[0].r) === 'G')) { melee(B, u, attackable[0], ctx); continue; }
       const ram = rammableFor(B, u); if (ram.length) { ramGate(B, u, ram[0][0], ram[0][1]); continue; }
       // march: through an open gate to the centre, or up to the nearest gate (a hex beside it, since barred gates cannot be entered)
       const m2 = HEXMAPS[B.city];
       const besideGates = []; for (const g of gates) { const [gc, gr] = g.split(',').map(Number); if (gateOpen(B, gc, gr)) { if (!unitAt(B, gc, gr)) besideGates.push(g); } else for (const [nc, nr] of neighbours(gc, gr, m2.w, m2.h)) if (!insideWalls(terrainAt(B, nc, nr)) && !unitAt(B, nc, nr)) besideGates.push(key(nc, nr)); }
       const goals = anyGateOpen(B) ? [centre].concat(besideGates) : besideGates;
       const step = stepToward(B, u, goals);
-      if (step) { const [c, r] = step.split(',').map(Number); if (moveUnit(B, u, c, r)) { const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1); const ram2 = rammableFor(B, u); if (again.length && !u.acted && (worth(again[0]) || terrainAt(B, again[0].c, again[0].r) === 'G')) fight(B, u, again[0], ctx); else if (ram2.length && !u.acted) ramGate(B, u, ram2[0][0], ram2[0][1]); } }
-      else if (attackable.length) fight(B, u, attackable[0], ctx);
+      if (step) { const [c, r] = step.split(',').map(Number); if (moveUnit(B, u, c, r)) { const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1); const ram2 = rammableFor(B, u); if (again.length && !u.acted && (worth(again[0]) || terrainAt(B, again[0].c, again[0].r) === 'G')) melee(B, u, again[0], ctx); else if (ram2.length && !u.acted) ramGate(B, u, ram2[0][0], ram2[0][1]); } }
+      else if (attackable.length) melee(B, u, attackable[0], ctx);
     }
+    // letters to a wavering enemy officer, now and then, with gold if there is gold to spare
+    if (ctx.canDefect && ctx.gold && Math.random() < 0.15) { const ts = subornTargets(B, side, ctx); const g = Math.min(ctx.gold(side), 800); if (ts.length && g >= 200 && ts[0].chance + g / 4000 >= 0.3) suborn(B, side, ts[0].unit, ts[0].name, g, ctx); }
     // the attacker gives up when the fight is hopeless
     const stalledOut = B.day - (B.lastBlood || 0) > 14 && ratio < 0.6;
     if (side === 'A' && (((!pending || stalledOut) && ((sideTroops(B, 'A') < B.att.start * 0.3 && ratio < 1) || (foodDays < 1 && ratio < 1) || ratio < 0.35 || stalledOut)) || B.day >= 120)) { if (B.day >= 120) log(B, 'Four months before the walls: the siege is abandoned.', 'def'); withdraw(B, 'A', ctx); }
@@ -305,7 +404,7 @@ const BATTLE = (() => {
     const centreHeld = A.some((u) => u.c === 6 && u.r === 5) && (!dInside.length || sideTroops(B, 'D') < sideTroops(B, 'A') * 0.3);
     if (centreHeld) { B.over = { result: 'captured' }; log(B, `The attackers hold the heart of ${ctx.pname(B.city)}. The city has fallen!`, 'att'); }
   }
-  function beginDay(B) { B.day++; B.dayInMonth++; for (const u of B.units) { u.mp = MP_PER_DAY; u.acted = false; } }
+  function beginDay(B) { B.day++; B.dayInMonth++; B.duelsToday = {}; for (const u of B.units) { u.mp = MP_PER_DAY; u.acted = false; } }
   function endDay(B, ctx) {
     // food
     const eatA = Math.ceil(sideTroops(B, 'A') * FOOD_PER_MAN_DAY), eatD = Math.ceil(sideTroops(B, 'D') * FOOD_PER_MAN_DAY);
@@ -350,5 +449,5 @@ const BATTLE = (() => {
   }
 
   return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, hexDist, neighbours, deployDefender, deployAttacker,
-    create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
+    create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, duel, champion, canChallenge, aiAcceptsDuel, answerChallenge, autoAnswer, melee, subornTargets, subornChance, suborn, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
 })();

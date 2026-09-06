@@ -1007,15 +1007,19 @@ const UI = (() => {
     const o = Game.off(c.name);
     const chance = Math.round(Game.captiveChance(S.player, o) * 100);
     const from = c.from ? Game.fname(c.from) : 'no one';
+    const house = c.from && S.factions[c.from] && S.factions[c.from].alive && Game.factionProvinces(c.from).length ? c.from : null;
+    const price = Game.ransomPrice(o);
     openModal(`<h3>Prisoner: ${esc(o.name)}</h3>
       <div class="captive-card"><div class="cn">${esc(o.name)}</div><div class="cs">Age ${Game.age(o)} · LDR ${o.ldr} · WAR ${o.war} · INT ${o.int} · POL ${o.pol} · CHR ${o.chr}<br>Served ${esc(from)} with loyalty ${o.loyalty}.</div></div>
       <p>${esc(o.name)} is brought before you in chains. What is your will?</p>
       <div class="modal-actions">
         <button data-act="release">Release</button>
         <button class="btn-red" data-act="execute">Execute</button>
-        <button class="btn btn-gold" data-act="recruit">Recruit (${chance}%)</button>
+        ${house && !c.ransomRefused ? `<button data-act="ransom" title="Demand ${fmt(price)} gold from ${esc(Game.fname(house))}; they may refuse">Ransom (${fmt(price)}g)</button>` : ''}
+        ${chance > 0 ? `<button class="btn btn-gold" data-act="recruit">Recruit (${chance}%)</button>` : `<button disabled title="Loyalty ${o.loyalty}: he will not turn while his house stands">Recruit</button>`}
       </div>`, {
       recruit: () => { const r = Game.resolveCaptive(c.name, 'recruit'); showResult(r.msg, () => handleCaptives(done)); },
+      ransom: () => { const r = Game.resolveCaptive(c.name, 'ransom'); renderAll(); showResult(r.msg, () => handleCaptives(done)); },
       release: () => { const r = Game.resolveCaptive(c.name, 'release'); showResult(r.msg, () => handleCaptives(done)); },
       execute: () => { const r = Game.resolveCaptive(c.name, 'execute'); showResult(r.msg, () => handleCaptives(done)); },
     }, true);
@@ -1045,7 +1049,7 @@ const UI = (() => {
     }
     const F = S.factions[S.player];
     const idle = F.guest ? Game.factionOfficers(S.player).filter((o) => !o.acted && Game.prov(o.city).owner === F.host).length : Game.factionProvinces(S.player).reduce((s, p) => s + Game.idleOfficers(p.id).length, 0);
-    const afterTurn = () => handleDecisions(() => handleTitle(() => handleSuccession(() => handleProposals(() => handleCaptives(renderAll)))));
+    const afterTurn = () => handleDecisions(() => handleTitle(() => handleSuccession(() => handleAid(() => handleProposals(() => handleCaptives(renderAll))))));
     const go = () => {
       const notices = Game.endTurn();
       if (S.factions[S.player].guest) selected = null;
@@ -1250,13 +1254,15 @@ const UI = (() => {
 
 
   // ---------- the battle screen ----------
-  const BT = { city: null, sel: null, mode: null, replay: null, frame: 0, timer: null };
+  const BT = { city: null, sel: null, mode: null, replay: null, frame: 0, timer: null, asking: false };
+  const UICTX = { officer: (n) => Game.off(n) };
   const BT_S = 26;
   function initBattleScreen() {
     $('#bt-close').addEventListener('click', closeBattle);
     $('#bt-help').addEventListener('click', () => openModal(`<h3>Fighting a battle</h3>
       <p class="hint">Each turn is a day. Click one of your units, then a green hex to march there (three movement points a day; hills, forest and streams cost two, marsh three, roads one), a red enemy to attack it, or a gold gate to set the ram against it. A barred gate falls after three days of ramming, or when its defenders break. Units on walls, gates and hills loose arrows two hexes away without reply. Casualties depend on strength, commanders, training, morale and the ground; a unit breaks when its morale or numbers fail, and its officers may be captured.</p>
       <p class="hint">The attacker moves first each day. Both armies eat: the besiegers from the grain they brought, the garrison from the city. Messengers can be sent once for help; your own neighbouring cities and allies may march, arriving in one to ten days for the attacker and fifteen to twenty for the defender. If the month ends undecided the siege continues next month, and more men and grain can be sent from neighbouring cities in the normal turn. Taking the city's heart, or breaking every defender, wins it; the attacker may withdraw at any time.</p>
+      <p class="hint"><b>Champions.</b> When a unit with officers attacks a unit with officers, its best fighter may first call the enemy's out to single combat; the AI does the same to you, and either side may decline at a small cost in morale. The loser's men lose heart, and the loser is wounded for the rest of the battle, or taken, or slain. <b>Letters.</b> Your cleverest officer on the field may write to a wavering enemy officer (loyalty under 70, not a ruler or sworn brother): gold sweetens it, a losing fight and low morale help, and a commander who turns brings his whole unit over. Officers of a broken unit mostly escape; some are captured and a few fall.</p>
       <div class="modal-actions"><button class="btn btn-gold" data-act="close">Close</button></div>`, { close: closeModal }));
     $('#bt-map').addEventListener('click', (e) => {
       if (BT.replay) return;
@@ -1265,7 +1271,16 @@ const UI = (() => {
       if (tok) {
         const u = B.units.find((x) => x.id === +tok.dataset.unit); if (!u) return;
         if (u.side === Game.playerSideOf(B)) { BT.sel = u.id; BT.mode = null; renderBattle(); return; }
-        if (BT.sel) { const r = Game.battleAttack(BT.city, BT.sel, u.id); if (!r.ok) toast(r.msg); afterBattleAction(); }
+        if (BT.sel) {
+          const su = B.units.find((x) => x.id === BT.sel); const doAttack = (opts) => { const r = Game.battleAttack(BT.city, BT.sel, u.id, opts); if (!r.ok) toast(r.msg); afterBattleAction(); };
+          if (su && BATTLE.canChallenge(B, su, u, UICTX)) {
+            const a = BATTLE.champion(B, su, UICTX), d = BATTLE.champion(B, u, UICTX);
+            openModal(`<h3>Attack ${esc(u.officers[0] ? `${u.officers[0]}'s men` : 'the enemy')}</h3><p>${esc(a.name)} (WAR ${a.war}) may ride out first and challenge ${esc(d.name)} (WAR ${d.war}) to single combat before the lines meet. The loser's men lose heart, and he may be wounded, taken or slain; the enemy may decline, to his own men's shame.</p>
+              <div class="modal-actions"><button data-act="cancel">Cancel</button><button data-act="duel">⚔ Challenge, then attack</button><button class="btn btn-gold" data-act="attack">Attack</button></div>`, { cancel: closeModal, duel: () => { closeModal(); doAttack({ duel: true }); }, attack: () => { closeModal(); doAttack({}); } });
+            return;
+          }
+          doAttack({});
+        }
         return;
       }
       const hl = e.target.closest('.hl');
@@ -1279,7 +1294,8 @@ const UI = (() => {
       const b = e.target.closest('button'); if (!b) return; const act = b.dataset.act;
       if (BT.replay) { replayControl(act); return; }
       const B = Game.battleFor(BT.city); if (!B) { closeBattle(); return; }
-      if (act === 'end') { Game.battleEndDay(BT.city); afterBattleAction(true); }
+      if (act === 'end') { const r = Game.battleEndDay(BT.city); afterBattleAction(r.msg !== 'challenge'); }
+      else if (act === 'suborn') subornDialog();
       else if (act === 'auto') { Game.battleEndDay(BT.city, true); afterBattleAction(true); }
       else if (act === 'month') { Game.battleAutoMonth(BT.city); afterBattleAction(true); }
       else if (act === 'msg') messengerDialog(BT.city, renderBattle);
@@ -1329,7 +1345,7 @@ const UI = (() => {
     $('#bt-food').textContent = `Besiegers' grain ${fmt(Math.floor(B.att.food))} (${eatA ? Math.floor(B.att.food / eatA) : '∞'} days) · city granary ${fmt(S.provinces[B.city].food)}`;
     const sideRow = (side, name) => { const us = BATTLE.sideUnits(B, side); const arriving = B.arrivals.filter((a) => a.side === side && !a.done); return `<div class="side"><span><span class="chip" style="background:${unitColor(side === 'A' ? B.attF : B.defF)}"></span> ${esc(name)}${ps === side ? ' (you)' : ''}</span><b>${us.length} units · ${fmt(BATTLE.sideTroops(B, side))}${arriving.length ? ` · +${fmt(arriving.reduce((a, x) => a + x.troops, 0))} coming (day ${Math.min(...arriving.map((x) => x.day))})` : ''}</b></div>`; };
     $('#bt-sides').innerHTML = sideRow('A', Game.fname(B.attF)) + sideRow('D', B.defF ? Game.fname(B.defF) : 'the town militia');
-    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? esc(sel.officers.join(', ')) : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
+    if (sel) { const t = BATTLE.terrainAt(B, sel.c, sel.r); $('#bt-unit').innerHTML = `<div class="u-name">${sel.officers.length ? sel.officers.map((n) => esc(n) + (B.wounded && B.wounded[n] ? ' <small class="hint">(wounded)</small>' : '')).join(', ') : 'Unled unit'} <small class="hint">(${sel.side === 'A' ? Game.fname(sel.fid) : Game.fname(sel.fid)})</small></div><div>${fmt(sel.troops)} men · morale ${sel.morale} · training ${sel.training} · on ${HEXVIEW.TERRAIN[t].name}${BATTLE.defenceBonus(B, sel) ? ` (+${Math.round(BATTLE.defenceBonus(B, sel) * 100)}% defence)` : ''}</div><div class="hint">${sel.side === ps ? `${sel.mp} movement left · ${sel.acted ? 'has fought today' : 'may still fight'}. Click a green hex to move, a red enemy to attack, a gold gate to ram.` : 'Enemy unit. Select one of yours to attack it.'}</div>`; }
     else $('#bt-unit').innerHTML = `<div class="hint">${ps ? (B.phase === 'player' ? 'Click one of your units to give it orders.' : 'The day is done; end it to continue.') : 'You are watching this siege.'}</div>`;
     const canAct = ps && !B.over && B.dayInMonth < 30;
     $('#bt-actions').innerHTML = ps ? `
@@ -1337,9 +1353,36 @@ const UI = (() => {
       <button data-act="auto" ${canAct ? '' : 'disabled'} title="Your generals give the orders for this day">Auto day</button>
       <button data-act="month" ${canAct ? '' : 'disabled'} title="Your generals fight the rest of the month">Auto to month's end</button>
       <button data-act="msg" ${!B.over && !B[ps === 'A' ? 'att' : 'def'].asked ? '' : 'disabled'} title="Ask neighbouring cities and allies for help">✉ Messengers</button>
-      <button class="wide btn-red" data-act="withdraw" ${B.over ? 'disabled' : ''}>Withdraw</button>${B.dayInMonth >= 30 && !B.over ? '<div class="hint wide" style="grid-column:span 2">The month\\u2019s thirty days are fought. End the month on the map; the siege continues next month.</div>' : ''}` : `<div class="hint" style="grid-column:span 2">An AI siege in progress; it is fought out when the month ends.</div>`;
+      <button data-act="suborn" ${canAct && B.phase === 'player' ? '' : 'disabled'} title="Letters and gold to a wavering enemy officer">✉ Suborn</button>
+      <button class="btn-red" data-act="withdraw" ${B.over ? 'disabled' : ''}>Withdraw</button>${B.dayInMonth >= 30 && !B.over ? '<div class="hint wide" style="grid-column:span 2">The month\\u2019s thirty days are fought. End the month on the map; the siege continues next month.</div>' : ''}` : `<div class="hint" style="grid-column:span 2">An AI siege in progress; it is fought out when the month ends.</div>`;
+    if (B.pendingChallenge && ps && !BT.asking) {
+      const cu = B.units.find((x) => x.id === B.pendingChallenge.u), cv = B.units.find((x) => x.id === B.pendingChallenge.v);
+      const a = cu && BATTLE.champion(B, cu, UICTX), d = cv && BATTLE.champion(B, cv, UICTX);
+      if (a && d) {
+        BT.asking = true;
+        const answer = (yes) => { BT.asking = false; const r = Game.battleAnswerChallenge(BT.city, yes); closeModal(); const B2 = Game.battleFor(BT.city); afterBattleAction(!!(B2 && B2.phase === 'idle') || r.msg === 'over'); };
+        openModal(`<h3>A challenge!</h3><p>${esc(a.name)} of ${esc(Game.fname(cu.fid))} (WAR ${a.war}) rides out before your lines and calls for ${esc(d.name)} (WAR ${d.war}) to meet him in single combat. Decline, and your men mutter; accept, and the loser's men lose heart while he may be wounded, taken or slain.</p>
+          <div class="modal-actions"><button data-act="no">Decline</button><button class="btn btn-gold" data-act="yes">⚔ Accept</button></div>`, { no: () => answer(false), yes: () => answer(true) }, true);
+      } else { Game.battleAnswerChallenge(BT.city, false); }
+    }
     const byDay = {}; for (const l of B.log.slice(-160)) (byDay[l.day] = byDay[l.day] || []).push(l);
     $('#bt-log').innerHTML = Object.keys(byDay).sort((a, b) => b - a).map((d) => `<div class="day-head">Day ${d}</div>` + byDay[d].map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('')).join('');
+  }
+  // letters across the lines: turn a wavering enemy officer, with gold to sweeten it
+  function subornDialog() {
+    const ts = Game.battleSubornTargets(BT.city); const gold = Game.battleGold(BT.city); const B = Game.battleFor(BT.city);
+    if (!ts.length) { showResult('No enemy officer on the field can be turned: they are steadfast, sworn to their lord, or their lord himself, or no officer of yours is on the field to write.', renderBattle); return; }
+    const refresh = () => { const g = Math.max(0, +$('#sb-gold').value || 0); const t = ts.find((x) => x.name === $('#sb-who').value); $('#sb-out').textContent = t ? `about ${Math.round(Math.min(0.8, t.chance + g / 4000) * 100)}%` : ''; };
+    openModal(`<h3>Letters across the lines</h3>
+      <p class="hint">Your cleverest officer on the field writes to a wavering enemy. A commander who turns brings his whole unit over; another officer slips across alone. Gold sweetens the offer and is spent whether or not he comes. Each officer can be approached once. ${fmt(gold)} gold is at hand in ${Game.playerSideOf(B) === 'A' ? 'the army\u2019s home city' : 'the city'}.</p>
+      <div class="row"><label>Officer</label><select id="sb-who">${ts.map((t) => `<option value="${esc(t.name)}">${esc(t.name)} · loyalty ${t.loyalty}${t.lead ? ` · commands ${fmt(t.troops)}` : ''}</option>`).join('')}</select></div>
+      <div class="row"><label>Gold</label><input type="number" id="sb-gold" min="0" max="${gold}" value="${Math.min(gold, 500)}"></div>
+      <div class="row"><label>Chance</label><span id="sb-out"></span></div>
+      <div class="modal-actions"><button data-act="cancel">Back</button><button class="btn btn-gold" data-act="ok">Send the letters</button></div>`, {
+      cancel: closeModal, oninput: refresh,
+      ok: () => { const t = ts.find((x) => x.name === $('#sb-who').value); const r = Game.battleSuborn(BT.city, t.unit, t.name, +$('#sb-gold').value); closeModal(); toast(r.msg); afterBattleAction(); },
+    });
+    refresh();
   }
   // ask for help: own neighbours with amounts, allies yes/no
   function messengerDialog(city, done) {
@@ -1353,15 +1396,15 @@ const UI = (() => {
     });
   }
   // from a neighbouring city during the month: men and grain for a battle nearby
-  function reinforceDialog(fromId, city) {
+  function reinforceDialog(fromId, city, after) {
     const S = Game.state(); const p = Game.prov(fromId); const idle = Game.idleOfficers(fromId).filter((o) => !Game.isRuler(o));
     openModal(`<h3>Send help to ${esc(Game.pname(city))}</h3><p class="hint">A column from ${esc(Game.pname(fromId))} reaches the battle within ten days. An officer must lead troops; grain may go alone.</p>
       <div class="kv"><span>Troops (${fmt(p.troops)} here)</span><b><input type="number" id="rf-t" min="0" max="${p.troops}" value="${Math.floor(p.troops * 0.5)}" style="width:100px"></b></div>
       <div class="kv"><span>Food (${fmt(p.food)} here)</span><b><input type="number" id="rf-f" min="0" max="${p.food}" value="${Math.min(p.food, 5000)}" style="width:100px"></b></div>
       <div class="kv"><span>Officer</span><b><select id="rf-o">${idle.map((o) => `<option>${esc(o.name)}</option>`).join('')}<option value="">none (grain only)</option></select></b></div>
       <div class="modal-actions"><button data-act="cancel">Cancel</button><button class="btn btn-gold" data-act="ok">Send</button></div>`, {
-      cancel: closeModal,
-      ok: () => { const o = $('#rf-o').value; const r = Game.reinforceBattle(fromId, city, { troops: o ? +$('#rf-t').value : 0, food: +$('#rf-f').value, officers: o ? [o] : [] }); closeModal(); result(r); },
+      cancel: () => { closeModal(); if (after) after(); },
+      ok: () => { const o = $('#rf-o').value; const r = Game.reinforceBattle(fromId, city, { troops: o ? +$('#rf-t').value : 0, food: +$('#rf-f').value, officers: o ? [o] : [] }); closeModal(); if (after) { renderAll(); showResult(r.msg, after); } else result(r); },
     });
   }
   // replay of an AI battle, frame by frame
@@ -1406,7 +1449,7 @@ const UI = (() => {
     if (S.observer) return showDiplomacyObserver();
     const me = S.player;
     const rows = Object.values(S.factions).filter((f) => f.alive && f.id !== me)
-      .map((f) => ({ f, cities: Game.factionProvinces(f.id).length, troops: Game.totalTroops(f.id), rel: Game.relation(me, f.id), st: Game.treatyStatus(me, f.id), border: Game.bordering(me, f.id) }))
+      .map((f) => ({ f, cities: Game.factionProvinces(f.id).length, troops: Game.totalTroops(f.id), rel: Game.relation(me, f.id), st: Game.treatyStatus(me, f.id), border: Game.bordering(me, f.id), owed: Game.favorsOwed(me, f.id), owedMe: Game.favorsOwed(f.id, me) }))
       .sort((a, b) => (b.border ? 1 : 0) - (a.border ? 1 : 0) || b.cities - a.cities);
     const gold = Game.factionProvinces(me).reduce((s, p) => s + p.gold, 0);
     const envoys = Game.factionOfficers(me).filter((o) => !o.acted && !Game.isRuler(o) && Game.prov(o.city).owner === me).length;
@@ -1418,7 +1461,7 @@ const UI = (() => {
         <td>${esc(r.f.name)}${r.border ? ' <small style="color:var(--muted)">(neighbour)</small>' : ''}${(r.f.persona || []).length ? `<br><small class="persona">${esc((r.f.persona || []).join(', '))}</small>` : ''}${r.f.treachery > 0 ? ` <small class="persona" style="color:#e29a8f" title="Has broken treaties or struck right after a ceasefire lapsed">untrustworthy ×${r.f.treachery}</small>` : ''}</td>
         <td>${r.cities} cities · ${fmt(r.troops)}</td>
         <td class="rel-${Game.relationWord(r.rel)}">${Game.relationWord(r.rel)} (${r.rel})</td>
-        <td class="st-${r.st}">${treatyLabel(me, r.f.id)}</td>
+        <td class="st-${r.st}">${treatyLabel(me, r.f.id)}${r.owed ? `<br><small style="color:#e29a8f" title="Favours are owed for marching to an ally's battle; repay by marching in turn or with a gift worth 400 or more">you owe ${r.owed} favour${r.owed > 1 ? 's' : ''}</small>` : r.owedMe ? `<br><small style="color:#9fd69f" title="They owe you for marching to their battle">owes you ${r.owedMe} favour${r.owedMe > 1 ? 's' : ''}</small>` : ''}</td>
         <td class="acts">
           <button class="btn-sm" data-act="gift" data-f="${r.f.id}">Gift</button>
           ${r.st === 'neutral' ? `<button class="btn-sm" data-act="cease" data-f="${r.f.id}">Ceasefire</button>` : ''}
@@ -1483,23 +1526,25 @@ const UI = (() => {
 
   function giftDialog(target) {
     const S = Game.state(); const me = S.player;
-    const cities = Game.factionProvinces(me).filter((p) => p.gold > 0).sort((a, b) => b.gold - a.gold);
-    if (!cities.length) { showResult('You have no gold to give.', showDiplomacy); return; }
+    const cities = Game.factionProvinces(me).filter((p) => p.gold > 0 || p.food > 0).sort((a, b) => b.gold - a.gold);
+    if (!cities.length) { showResult('You have nothing to give.', showDiplomacy); return; }
+    const owed = Game.favorsOwed(me, target);
     const refresh = () => {
-      const g = Math.max(0, +$('#gf-gold').value || 0);
-      $('#gf-out').textContent = `Relations +${Math.min(20, 3 + Math.floor(g / 100))}`;
-      $('#gf-gold').max = Game.prov($('#gf-city').value).gold;
+      const g = Math.max(0, +$('#gf-gold').value || 0), fd = Math.max(0, +$('#gf-food').value || 0); const v = g + fd / 10;
+      $('#gf-out').textContent = `Relations +${Math.min(20, 3 + Math.floor(v / 100))}${owed ? (v >= 400 ? ' · repays a favour you owe' : ' · a gift worth 400 (gold, or food at a tenth) would repay a favour') : ''}`;
+      $('#gf-gold').max = Game.prov($('#gf-city').value).gold; $('#gf-food').max = Game.prov($('#gf-city').value).food;
     };
     const treasures = Game.houseItems(me);
     openModal(`<h3>Gifts for ${esc(Game.fname(target))}</h3>
-      <p>Relations now: <span class="rel-${Game.relationWord(Game.relation(me, target))}">${Game.relationWord(Game.relation(me, target))} (${Game.relation(me, target)})</span>. Gifts need no envoy. Gold gives up to +20; a treasure gives more, and the Imperial Seal most of all.</p>
+      <p>Relations now: <span class="rel-${Game.relationWord(Game.relation(me, target))}">${Game.relationWord(Game.relation(me, target))} (${Game.relation(me, target)})</span>. Gifts need no envoy. Gold and food give up to +20; a treasure gives more, and the Imperial Seal most of all.${owed ? ` You owe ${Game.fname(target)} ${owed} favour${owed > 1 ? 's' : ''} for marching to your battles; a gift worth 400 repays one.` : ''}</p>
       ${treasures.length ? `<div class="row"><label>Treasure</label><select id="gf-item" style="flex:1"><option value="">— gold only —</option>${treasures.map((it) => `<option value="${it.id}">${esc(it.name)} (held by ${esc(S.items[it.id].owner)}) · relations +${Math.min(35, Game.itemValue(it))}</option>`).join('')}</select></div>` : ''}
       <div class="row"><label>From city</label><select id="gf-city">${cities.map((c) => `<option value="${c.id}">${esc(Game.pname(c.id))} (${fmt(c.gold)} gold)</option>`).join('')}</select></div>
-      <div class="row"><label>Gold</label><input type="number" id="gf-gold" min="1" value="${Math.min(300, cities[0].gold)}"></div>
+      <div class="row"><label>Gold</label><input type="number" id="gf-gold" min="0" value="${Math.min(owed ? 400 : 300, cities[0].gold)}"></div>
+      <div class="row"><label>Food</label><input type="number" id="gf-food" min="0" value="0"></div>
       <div class="row"><label>Effect</label><span id="gf-out"></span></div>
       <div class="modal-actions"><button data-act="cancel">Back</button><button class="btn btn-gold" data-act="ok">Send</button></div>`, {
       cancel: showDiplomacy, oninput: refresh,
-      ok: () => { const sel = $('#gf-item'); if (sel && sel.value) { const r = Game.giftItem(me, target, sel.value); if (!r.ok) { result(r); return; } renderAll(); showResult(r.msg, showDiplomacy); return; } const r = Game.sendGift(me, target, $('#gf-city').value, +$('#gf-gold').value); if (!r.ok) { result(r); return; } renderAll(); showResult(r.msg, showDiplomacy); },
+      ok: () => { const sel = $('#gf-item'); if (sel && sel.value) { const r = Game.giftItem(me, target, sel.value); if (!r.ok) { result(r); return; } renderAll(); showResult(r.msg, showDiplomacy); return; } const r = Game.sendGift(me, target, $('#gf-city').value, +$('#gf-gold').value, +$('#gf-food').value); if (!r.ok) { result(r); return; } renderAll(); showResult(r.msg, showDiplomacy); },
     });
     refresh();
   }
@@ -1566,6 +1611,22 @@ const UI = (() => {
     }, true);
   }
 
+  // an allied house next to a battle has asked for men; the battle waits on the answer until the month ends
+  function handleAid(done) {
+    const S = Game.state(); const a = (S.pendingAid || [])[0];
+    if (!a) { done(); return; }
+    const B = Game.battleFor(a.city); const from = Game.fac(a.from);
+    if (!B || B.over || !from || !from.alive || (B.helpers && B.helpers[S.player])) { S.pendingAid.shift(); handleAid(done); return; }
+    const owed = Game.favorsOwed(S.player, a.from), theyOwe = Game.favorsOwed(a.from, S.player);
+    openModal(`<h3>A rider from ${esc(from.name)}</h3>
+      <p>${esc(from.name)} ${a.side === 'A' ? 'is besieging' : 'is besieged in'} ${esc(Game.pname(a.city))} and asks you to march from ${esc(Game.pname(a.fromCity))}. ${owed ? `You owe them ${owed} favour${owed > 1 ? 's' : ''}; refusing now will cost you dearly.` : theyOwe ? `They owe you ${theyOwe} favour${theyOwe > 1 ? 's' : ''}; helping puts them further in your debt.` : 'Helping puts them in your debt, to be repaid in kind or with gifts.'}</p>
+      <div class="kv"><span>The field</span><b>${fmt(BATTLE.sideTroops(B, 'A'))} besiegers · ${fmt(BATTLE.sideTroops(B, 'D'))} defenders</b></div>
+      <div class="modal-actions"><button data-act="no">Decline</button><button data-act="later">Decide during the month</button><button class="btn btn-gold" data-act="yes">Send help</button></div>`, {
+      no: () => { const r = Game.declineAid(0); renderAll(); showResult(r.msg, () => handleAid(done)); },
+      later: () => { closeModal(); done(); },
+      yes: () => { closeModal(); reinforceDialog(a.fromCity, a.city, () => handleAid(done)); },
+    }, true);
+  }
   function handleProposals(done) {
     const S = Game.state();
     const pr = S.pendingProposals[0];
@@ -1575,11 +1636,12 @@ const UI = (() => {
     const rel = Game.relation(S.player, pr.from);
     const text = pr.type === 'ceasefire' ? `proposes a ${Game.CEASEFIRE_MONTHS}-month ceasefire. Neither side may attack the other until it expires.`
       : pr.type === 'alliance' ? `proposes a ${Game.ALLIANCE_MONTHS / 12}-year alliance. Allies never attack each other and may call on one another in war.`
+      : pr.type === 'ransom' ? `holds your officer <b>${esc(pr.officer)}</b> in chains and offers him back for <b>${fmt(pr.price)} gold</b>, paid from your richest city. Refuse, and his fate is theirs to decide.`
       : `asks you to join a war against <b>${esc(Game.fname(pr.enemy))}</b>. If you agree, your name is bound to the campaign for six months.`;
     openModal(`<h3>An envoy from ${esc(from.name)}</h3>
       <div class="captive-card"><div class="cn">${esc(pr.envoy)}</div><div class="cs">Envoy of ${esc(from.name)} · ${Game.factionProvinces(pr.from).length} cities · ${fmt(Game.totalTroops(pr.from))} troops<br>Relations: <span class="rel-${Game.relationWord(rel)}">${Game.relationWord(rel)} (${rel})</span> · ${treatyLabel(S.player, pr.from)}</div></div>
       <p>${esc(from.name)} ${text}${pr.sweetener && S.items[pr.sweetener] && S.items[pr.sweetener].owner ? ` As a token of good faith the envoy carries the <b>${esc(Game.itemData(pr.sweetener).name)}</b>, yours if you accept.` : ''}</p>
-      <div class="modal-actions"><button data-act="no">Decline</button><button class="btn btn-gold" data-act="yes">Accept</button></div>`, {
+      <div class="modal-actions"><button data-act="no">${pr.type === 'ransom' ? 'Refuse' : 'Decline'}</button><button class="btn btn-gold" data-act="yes">${pr.type === 'ransom' ? `Pay ${fmt(pr.price)} gold` : 'Accept'}</button></div>`, {
       yes: () => { const r = Game.respondProposal(0, true); renderAll(); showResult(r.msg, () => handleProposals(done)); },
       no: () => { const r = Game.respondProposal(0, false); renderAll(); showResult(r.msg, () => handleProposals(done)); },
     }, true);

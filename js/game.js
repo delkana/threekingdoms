@@ -77,7 +77,7 @@ const Game = (() => {
     S = {
       year: SCENARIO.year, month: SCENARIO.month, turn: 1,
       player: playerId || null, observer: !playerId, provinces, adj, officers, factions,
-      diplomacy: {}, pendingProposals: [], pendingSuccession: null,
+      diplomacy: {}, pendingProposals: [], pendingSuccession: null, favors: {}, pendingAid: [],
       options: { historicalDeaths: options.historicalDeaths !== false, difficulty: options.difficulty || 'normal' },
       pendingTitle: null, history: [], stats: { battles: 0, captures: 0, deaths: 0 },
       eventsFired: {}, objectivesDone: {}, pendingDecisions: [], battles: {},
@@ -1122,17 +1122,30 @@ const Game = (() => {
     if (areEnemies(o.name, ruler.name)) return 0;
     if (bondedRuler(o, captorFid)) return 0;   // will not abandon a brother who still rules
     const originalLoyalty = o.faction && S.factions[o.faction].alive ? o.loyalty : Math.min(o.loyalty, 60);
+    if (originalLoyalty >= 70 && o.faction && S.factions[o.faction].alive && factionProvinces(o.faction).length) return 0;   // a loyal man of a living house cannot be turned
     let c = (ruler.chr - originalLoyalty + 45) / 100;
     if (o.faction && S.factions[o.faction].ruler === o.name) { if (S.factions[o.faction].alive) return 0; c = Math.min(c, 0.35); }
     return clamp(c, 0.05, 0.9);
   }
 
+  const ransomPrice = (o) => 300 + (o.ldr + o.war + o.int + o.pol + o.chr) * 3;
   function resolveCaptive(name, action) {
     const idx = S.pendingCaptives.findIndex((c) => c.name === name);
     if (idx < 0) return fail('No such captive.');
     const c = S.pendingCaptives.splice(idx, 1)[0];
     const o = off(name);
     if (!o) return fail(`${name} is no longer among the living.`);
+    if (action === 'ransom') {
+      const house = c.from && S.factions[c.from] && S.factions[c.from].alive && o.faction === c.from && factionProvinces(c.from).length ? c.from : null;
+      const price = ransomPrice(o);
+      if (!house) { S.pendingCaptives.splice(idx, 0, c); return fail(`${o.name} has no house left to pay for him.`); }
+      const payer = factionProvinces(house).sort((x, y) => y.gold - x.gold)[0];
+      const willing = payer && payer.gold >= price && (house === S.player || price <= payer.gold * 0.6 || o.war + o.int >= 150 || relation(house, c.captor) >= 0);
+      if (!willing) { c.ransomRefused = true; S.pendingCaptives.splice(idx, 0, c); return fail(`${fname(house)} will not pay ${fmt(price)} gold for ${o.name}.`); }
+      payer.gold -= price; prov(c.city).gold += price; shiftRelation(house, c.captor, 3);
+      releaseCaptive(o, c);
+      return ok(`${fname(house)} pays ${fmt(price)} gold and ${o.name} goes home.`, 'dip');
+    }
     if (action === 'recruit') {
       const chance = captiveChance(c.captor, o);
       if (chance <= 0) { releaseCaptive(o, c); return ok(`${o.name} is the lord of a living house and will never serve another. ${fname(c.captor)} lets him go.`, 'bad'); }
@@ -1594,6 +1607,14 @@ const Game = (() => {
     const pr = S.pendingProposals.splice(index, 1)[0];
     if (!pr) return fail('No such proposal.');
     if (!S.factions[pr.from].alive) return ok(`${fname(pr.from)} no longer exists.`);
+    if (pr.type === 'ransom') {
+      const c = S.pendingCaptives.find((x) => x.name === pr.officer && x.captor === pr.from); const o = off(pr.officer);
+      if (!c || !o || o.captive !== pr.from) return ok(`${pr.officer} is no longer held by ${fname(pr.from)}.`);
+      if (!accept) return ok(`You refuse to pay for ${pr.officer}; his fate is in ${fname(pr.from)}'s hands.`, 'dip');
+      const payer = factionProvinces(S.player).sort((x, y) => y.gold - x.gold)[0];
+      if (!payer || payer.gold < pr.price) return fail(`No city of yours holds ${fmt(pr.price)} gold; the envoy leaves without an answer.`);
+      const r = resolveCaptive(pr.officer, 'ransom'); return r.ok ? ok(`You pay ${fmt(pr.price)} gold and ${pr.officer} comes home.`, 'dip') : r;
+    }
     if (accept) {
       if (pr.type === 'joint') {
         S.factions[S.player].warTarget = pr.enemy; S.factions[S.player].warTargetUntil = S.turn + 6;
@@ -1607,15 +1628,56 @@ const Game = (() => {
     return ok(`You send ${fname(pr.from)}'s envoy away empty-handed.`, 'dip');
   }
 
-  function sendGift(fid, target, pid, gold) {
+  // ---------- favours between allies ----------
+  // a house that marches to an ally's battle is owed a favour; the debt is repaid by marching in turn, or by a gift worth 400 or more
+  const favorKey = (a, b) => `${a}>${b}`;   // a owes b
+  const favorsOwed = (a, b) => (a && b && S.favors && S.favors[favorKey(a, b)]) || 0;
+  function addFavor(debtor, creditor, why) {
+    if (!debtor || !creditor || debtor === creditor) return null;
+    S.favors = S.favors || {};
+    if (favorsOwed(creditor, debtor) > 0) { S.favors[favorKey(creditor, debtor)]--; log(`${fname(creditor)} repays the favour owed to ${fname(debtor)}${why ? ` (${why})` : ''}.`, 'dip'); return 'repaid'; }
+    S.favors[favorKey(debtor, creditor)] = favorsOwed(debtor, creditor) + 1;
+    const text = `${fname(debtor)} now owes ${fname(creditor)} a favour${why ? ` (${why})` : ''}.`; if (debtor === S.player || creditor === S.player) notice(text, 'dip'); else log(text, 'dip');
+    return 'owed';
+  }
+  function settleFavor(debtor, creditor) { if (favorsOwed(debtor, creditor) > 0) { S.favors[favorKey(debtor, creditor)]--; return true; } return false; }
+  // an AI ally next to a battle asks the player to march; the battle waits for the player's month
+  function askPlayerAid(B, fid, side, fromCity) {
+    S.pendingAid = S.pendingAid || [];
+    if (S.pendingAid.some((a) => a.city === B.city && a.from === fid)) return;
+    const owed = favorsOwed(S.player, fid);
+    S.pendingAid.push({ from: fid, city: B.city, side, fromCity, turn: S.turn });
+    B.awaitPlayer = true;
+    notice(`${fname(fid)} asks for your aid in the ${side === 'A' ? 'siege' : 'defence'} of ${pname(B.city)}${owed ? `; you owe them ${owed} favour${owed > 1 ? 's' : ''}` : ''}. Men and grain can march from ${pname(fromCity)} before the month ends.`, 'dip', { major: true });
+  }
+  function declineAid(index) {
+    const a = (S.pendingAid || []).splice(index, 1)[0]; if (!a) return fail('No such request.');
+    const owed = favorsOwed(S.player, a.from); shiftRelation(S.player, a.from, -(5 + 5 * owed));
+    return ok(owed ? `You turn ${fname(a.from)} away though you owe them ${owed} favour${owed > 1 ? 's' : ''}; they will remember it.` : `You send ${fname(a.from)}'s rider back with regrets.`, 'dip');
+  }
+  // the AI repays what it owes with gifts when it has gold to spare
+  function aiRepayFavors(fid) {
+    for (const [k, n] of Object.entries(S.favors || {})) {
+      if (n <= 0) continue; const [debtor, creditor] = k.split('>'); if (debtor !== fid || !S.factions[creditor] || !S.factions[creditor].alive) continue;
+      const p = factionProvinces(fid).sort((x, y) => y.gold - x.gold)[0]; if (!p || p.gold < 1200 || Math.random() > 0.2) continue;
+      const r = sendGift(fid, creditor, p.id, 500);
+      if (r.ok) { if (creditor === S.player) notice(`${fname(fid)} sends 500 gold in gifts, repaying the favour owed to you.`, 'dip'); else log(`${fname(fid)} sends gifts to ${fname(creditor)} to repay a favour.`, 'dip'); }
+    }
+  }
+  function sendGift(fid, target, pid, gold, food = 0) {
     const p = prov(pid);
-    gold = Math.floor(gold);
-    if (p.owner !== fid || gold <= 0 || gold > p.gold) return fail('Not enough gold in that city.');
-    if (!S.factions[target].alive) return fail('That house no longer exists.');
-    p.gold -= gold;
-    const gain = Math.min(20, 3 + Math.floor(gold / 100));
+    gold = Math.floor(gold || 0); food = Math.floor(food || 0);
+    if (p.owner !== fid || gold < 0 || food < 0 || gold + food <= 0 || gold > p.gold || food > p.food) return fail('Not enough gold or food in that city.');
+    if (!S.factions[target] || !S.factions[target].alive) return fail('That house no longer exists.');
+    p.gold -= gold; p.food -= food;
+    const seat = rulerOf(target) && prov(rulerOf(target).city) && prov(rulerOf(target).city).owner === target ? prov(rulerOf(target).city) : factionProvinces(target)[0];
+    if (seat) { seat.gold += gold; seat.food += food; }
+    const value = gold + food / 10;
+    const gain = Math.min(20, 3 + Math.floor(value / 100));
     shiftRelation(fid, target, gain);
-    return ok(`${fname(fid)} sent ${fmt(gold)} gold in gifts to ${fname(target)}. Relations improve by ${gain}.`, 'dip');
+    const settled = value >= 400 && settleFavor(fid, target);
+    const what = [gold ? `${fmt(gold)} gold` : '', food ? `${fmt(food)} food` : ''].filter(Boolean).join(' and ');
+    return ok(`${fname(fid)} sent ${what} in gifts to ${fname(target)}. Relations improve by ${gain}.${settled ? ' The favour owed is repaid.' : ''}`, 'dip');
   }
 
   function breakTreaty(fid, target) {
@@ -1755,6 +1817,8 @@ const Game = (() => {
     for (const o of allOfficers()) { if (o.faction === fid) o.faction = origId; if (o.captive === fid) o.captive = origId; }
     for (const c of S.pendingCaptives) { c.captor = rekey(c.captor, fid, origId); c.from = rekey(c.from, fid, origId); }
     for (const pr of S.pendingProposals || []) pr.from = rekey(pr.from, fid, origId);
+    if (S.favors) S.favors = Object.fromEntries(Object.entries(S.favors).map(([k, v]) => [k.split('>').map((x) => rekey(x, fid, origId)).join('>'), v]));
+    for (const a of S.pendingAid || []) a.from = rekey(a.from, fid, origId);
     for (const [k, d] of Object.entries(S.diplomacy)) {
       const [a, b] = k.split('|'); if (a !== fid && b !== fid) continue;
       const na = rekey(a, fid, origId), nb = rekey(b, fid, origId); if (na === nb) { delete S.diplomacy[k]; continue; }
@@ -1790,6 +1854,20 @@ const Game = (() => {
   const battleExitToward = (city, fromId) => { const m = HEXMAPS[city]; return (m.exits.find((e) => e.to === fromId) || m.exits[0] || null); };
   const battleCtx = (B) => ({
     officer: (n) => off(n), fname, pname, turn: () => S.turn,
+    kill: (n, cause) => { const o = off(n); if (o) killOfficer(o, cause); },
+    guarded: (n) => { const o = off(n); return o ? guarded(o) : false; },
+    duelBonus: (n) => { const o = off(n); return o ? duelBonus(o) : 0; },
+    // who may be turned in the field: no rulers, no sworn brothers, no one who hates the new lord, and only the wavering
+    canDefect: (n, toFid) => { const o = off(n); if (!o || o.captive || !toFid || !S.factions[toFid] || !S.factions[toFid].alive || o.faction === toFid) return false; if (isRuler(o) || bondGroup(o.name)) return false; const r = rulerOf(toFid); if (r && areEnemies(o.name, r.name)) return false; return o.loyalty < 70; },
+    defect: (n, toFid) => {
+      const o = off(n); if (!o || !B.att) return; const from = o.faction;
+      o.faction = toFid; o.loyalty = 55; o.acted = true; o.city = toFid === B.attF ? B.att.from : B.city;
+      B.att.officers = B.att.officers.filter((x) => x !== n); B.def.officers = B.def.officers.filter((x) => x !== n); (toFid === B.attF ? B.att : B.def).officers.push(n);
+      const text = `${n} deserts ${fname(from)} for ${fname(toFid)} on the field before ${pname(B.city)}.`; if (from === S.player || toFid === S.player) notice(text, 'strat'); else log(text, 'strat');
+    },
+    raiseLoyalty: (n, d) => { const o = off(n); if (o) o.loyalty = clamp(o.loyalty + d, 0, 100); },
+    gold: (side) => { const p = prov(side === 'A' && B.att ? B.att.from : B.city); return p ? p.gold : 0; },
+    spendGold: (side, n) => { const p = prov(side === 'A' && B.att ? B.att.from : B.city); if (!p || p.gold < n) return false; p.gold -= n; return true; },
     cityFood: (d) => { const p = prov(B.city); if (d >= 0) { p.food += d; return true; } if (p.food + d < 0) { p.food = 0; return false; } p.food += d; return true; },
     syncCity: (b) => { const p = prov(b.city); if (!b.defF || p.owner === b.defF) p.troops = BATTLE.sideTroops(b, 'D'); },
   });
@@ -1812,7 +1890,7 @@ const Game = (() => {
     const text = `${fname(attF)} lays siege to ${pname(toId)} with ${fmt(troops)} men${defF ? `; ${fname(defF)} holds it with ${fmt(b.troops)}` : ''}.`;
     log(text, 'war');
     if (defF === S.player) notice(`${text} The battle awaits you.`, 'war', { major: true });
-    if (!playerSideOf(B)) runBattleMonth(B);
+    if (!playerSideOf(B) && !B.awaitPlayer) runBattleMonth(B);
     return { ok: true, battle: toId, report: B.report || null };
   }
   // neighbours and allies march to the field: the attacker's within one to ten days, the defender's in fifteen to twenty
@@ -1822,7 +1900,10 @@ const Game = (() => {
     const days = () => (side === 'A' ? ri(1, 10) : ri(15, 20));
     for (const n of S.adj[B.city]) {
       const p = prov(n); if (!p.owner || n === B.att.from) continue;
-      const own = p.owner === fid, ally = !own && treatyStatus(fid, p.owner) === 'alliance' && !S.factions[p.owner].guest && relation(fid, p.owner) >= (side === 'A' ? 40 : 30) && Math.random() < (side === 'A' ? 0.5 : 0.6);
+      const own = p.owner === fid, allied = !own && treatyStatus(fid, p.owner) === 'alliance' && !S.factions[p.owner].guest;
+      if (allied && p.owner === S.player && !S.observer) { askPlayerAid(B, fid, side, n); continue; }
+      const owed = allied ? favorsOwed(p.owner, fid) : 0, owing = allied ? favorsOwed(fid, p.owner) : 0;
+      const ally = allied && (relation(fid, p.owner) >= (side === 'A' ? 40 : 30) || owed > 0) && Math.random() < (side === 'A' ? 0.5 : 0.6) + 0.3 * Math.min(2, owed) - 0.15 * Math.min(2, owing);
       if (!own && !ally) continue;
       if (own && side === 'D' && (F.attackedBy || {})[B.attF] !== S.turn) { /* the messenger rides anyway */ }
       const spare = own ? spareTroops(fid, p) : Math.floor(p.troops * 0.3);
@@ -1833,7 +1914,7 @@ const Game = (() => {
       escort.acted = true; p.troops -= send; const food = Math.min(p.food, Math.floor(send * 0.1)); p.food -= food;
       BATTLE.addArrival(B, { side, fid: p.owner, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(B.city, n) });
       BATTLE.log(B, `${fname(p.owner)} sends ${fmt(send)} men from ${pname(n)} to ${side === 'A' ? 'join the siege' : 'relieve the city'}.`, side === 'A' ? 'att' : 'def');
-      if (!own) shiftRelation(fid, p.owner, 5);
+      if (!own) { shiftRelation(fid, p.owner, 5); addFavor(fid, p.owner, `aid at ${pname(B.city)}`); }
     }
     B[side === 'A' ? 'att' : 'def'].asked = true;
   }
@@ -1859,13 +1940,13 @@ const Game = (() => {
     for (const af of allies) {
       const A = S.factions[af]; if (!A || !A.alive || treatyStatus(fid, af) !== 'alliance') continue;
       const cities = S.adj[city].filter((n) => prov(n).owner === af); if (!cities.length) continue;
-      const chance = 0.35 + relation(fid, af) / 200 + (side === 'D' ? 0.1 : 0);
+      const chance = 0.35 + relation(fid, af) / 200 + (side === 'D' ? 0.1 : 0) + 0.3 * Math.min(2, favorsOwed(af, fid)) - 0.15 * Math.min(2, favorsOwed(fid, af));
       if (Math.random() > chance) { BATTLE.log(B, `${fname(af)} sends regrets and no soldiers.`, ''); shiftRelation(fid, af, -5); continue; }
       const n = cities.sort((x, y) => prov(y).troops - prov(x).troops)[0]; const p = prov(n); const send = Math.floor(p.troops * 0.3); if (send < 1000) continue;
       const idle = idleOfficers(n).filter((o) => !isRuler(o)).sort((x, y) => y.war - x.war); const escort = idle[0]; if (!escort) continue;
       escort.acted = true; p.troops -= send; const food = Math.min(p.food, Math.floor(send * 0.1)); p.food -= food;
       BATTLE.addArrival(B, { side, fid: af, from: n, troops: send, food, officers: [escort.name], training: p.training, days: days(), exit: battleExitToward(city, n) });
-      shiftRelation(fid, af, 5); sent.push(`${fmt(send)} from ${fname(af)}`);
+      shiftRelation(fid, af, 5); addFavor(fid, af, `aid at ${pname(city)}`); sent.push(`${fmt(send)} from ${fname(af)}`);
     }
     B[side === 'A' ? 'att' : 'def'].asked = true;
     return ok(sent.length ? `Messengers ride out. On the way: ${sent.join(', ')} (arriving in ${side === 'A' ? '1 to 10' : '15 to 20'} days).` : 'The messengers ride out, but no help is coming.');
@@ -1883,6 +1964,8 @@ const Game = (() => {
     for (const n of officers) { const e = useOfficer(n, fromId); if (e) return e; }
     for (const n of officers) off(n).acted = true;
     p.troops -= troops; p.food -= food;
+    const house = side === 'A' ? B.attF : B.defF;
+    if (p.owner !== house) { B.helpers = B.helpers || {}; if (!B.helpers[p.owner]) { B.helpers[p.owner] = true; shiftRelation(house, p.owner, 5); addFavor(house, p.owner, `aid at ${pname(city)}`); } if (p.owner === S.player) S.pendingAid = (S.pendingAid || []).filter((a) => a.city !== city); }
     BATTLE.addArrival(B, { side, fid: p.owner, from: fromId, troops, food, officers, training: p.training, days: ri(1, 10), exit: battleExitToward(city, fromId) });
     BATTLE.log(B, `${fname(p.owner)} sends ${troops ? fmt(troops) + ' men' : 'a grain train'}${food ? ` and ${fmt(food)} food` : ''} from ${pname(fromId)}.`, side === 'A' ? 'att' : 'def');
     return ok(`The column leaves ${pname(fromId)} for ${pname(city)} and will arrive within ten days.`);
@@ -1894,7 +1977,8 @@ const Game = (() => {
       const side = fid === B.attF ? 'A' : fid === B.defF ? 'D' : (B.attF && treatyStatus(fid, B.attF) === 'alliance' && fid !== B.defF) ? 'A' : (B.defF && treatyStatus(fid, B.defF) === 'alliance') ? 'D' : null;
       if (!side || B.startedTurn === S.turn) continue;   // this month's opening call was already made
       const mine = BATTLE.sideTroops(B, side), theirs = BATTLE.sideTroops(B, side === 'A' ? 'D' : 'A');
-      if (mine > theirs * 1.5 && fid !== B.defF) continue;
+      const house = side === 'A' ? B.attF : B.defF;
+      if (mine > theirs * 1.5 && fid !== B.defF && !(fid !== house && favorsOwed(fid, house) > 0)) continue;   // a favour owed is a debt to march
       for (const n of S.adj[B.city]) {
         const p = prov(n); if (p.owner !== fid) continue;
         const spare = spareTroops(fid, p); const send = Math.floor(spare * 0.5); const escort = idleOfficers(n).filter((o) => !isRuler(o)).sort((x, y) => y.war - x.war)[0];
@@ -1921,16 +2005,34 @@ const Game = (() => {
     const B = battleFor(city); if (!B || B.over) return fail('No battle.');
     if (B.phase !== 'player') battleBeginDay(city); if (B.over) return ok('over');
     const ctx = battleCtx(B); const ps = playerSideOf(B);
-    if (auto && ps) BATTLE.aiSide(B, ps, ctx);
-    if (!B.over && B.def.control === 'ai') BATTLE.aiSide(B, 'D', ctx);
-    if (!B.over && ps === 'D' && B.att.control === 'ai') { /* attacker already acted at the day's start */ }
-    BATTLE.endDay(B, ctx); B.phase = 'idle';
+    if (B.pendingChallenge) BATTLE.answerChallenge(B, auto ? BATTLE.autoAnswer(B, ctx) : false, ctx);   // an unanswered challenge is declined
+    if (!B.over && auto && ps && !B.autoActed) { B.autoActed = true; BATTLE.aiSide(B, ps, ctx); }
+    if (!B.over && B.def.control === 'ai' && !B.defActed) { B.defActed = true; BATTLE.aiSide(B, 'D', ctx); }
+    if (B.pendingChallenge) { if (auto) BATTLE.answerChallenge(B, BATTLE.autoAnswer(B, ctx), ctx); else { B.endPending = true; BATTLE.checkOver(B, ctx); if (B.over) finishBattle(B); return ok('challenge'); } }   // the AI has called out a champion; the player answers before the day ends
+    BATTLE.checkOver(B, ctx);
+    if (!B.over) BATTLE.endDay(B, ctx);
+    B.phase = 'idle'; B.autoActed = false; B.defActed = false; B.endPending = false;
     if (B.over) finishBattle(B);
     return ok('The day ends.');
   }
+  function battleAnswerChallenge(city, accept) {
+    const B = battleFor(city); if (!B || !B.pendingChallenge) return fail('No challenge.');
+    const ctx = battleCtx(B); BATTLE.answerChallenge(B, !!accept, ctx); BATTLE.checkOver(B, ctx);
+    if (B.over) { finishBattle(B); return ok('over'); }
+    if (B.endPending) return battleEndDay(city);
+    return ok(accept ? 'The champions ride out.' : 'The challenge is declined.');
+  }
+  function battleSubornTargets(city) { const B = battleFor(city); if (!B) return []; const ps = playerSideOf(B); return ps ? BATTLE.subornTargets(B, ps, battleCtx(B)) : []; }
+  function battleGold(city) { const B = battleFor(city); if (!B) return 0; const ps = playerSideOf(B); return ps ? battleCtx(B).gold(ps) : 0; }
+  function battleSuborn(city, unitId, name, gold) {
+    const B = battleFor(city); if (!B || B.over) return fail('No battle.'); const ps = playerSideOf(B); if (!ps || B.phase !== 'player') return fail('Not your turn.');
+    const r = BATTLE.suborn(B, ps, unitId, name, Math.max(0, Math.floor(gold || 0)), battleCtx(B));
+    if (r.ok) { BATTLE.checkOver(B, battleCtx(B)); if (B.over) finishBattle(B); }
+    return r.ok ? ok(r.msg, r.turned ? 'good' : '') : fail(r.msg);
+  }
   function battleAutoMonth(city) { const B = battleFor(city); if (!B) return fail('No battle.'); while (!B.over && B.dayInMonth < 30) battleEndDay(city, true); return ok('done'); }
   function battleMove(city, unitId, c, r) { const B = battleFor(city); if (!B || B.phase !== 'player') return fail('Begin the day first.'); const u = B.units.find((x) => x.id === unitId); if (!u || u.side !== playerSideOf(B)) return fail('Not your unit.'); return BATTLE.moveUnit(B, u, c, r) ? ok('Moved.') : fail('That hex is out of reach.'); }
-  function battleAttack(city, unitId, targetId) { const B = battleFor(city); if (!B || B.phase !== 'player') return fail('Begin the day first.'); const u = B.units.find((x) => x.id === unitId), v = B.units.find((x) => x.id === targetId); if (!u || !v || u.side !== playerSideOf(B)) return fail('Not your unit.'); if (u.acted) return fail('That unit has already fought today.'); const r = BATTLE.attackUnit(B, u, v, battleCtx(B)); if (r) BATTLE.checkOver(B, battleCtx(B)); if (B.over) finishBattle(B); return r ? ok('Attack made.') : fail('Out of reach.'); }
+  function battleAttack(city, unitId, targetId, opts = {}) { const B = battleFor(city); if (!B || B.phase !== 'player') return fail('Begin the day first.'); const u = B.units.find((x) => x.id === unitId), v = B.units.find((x) => x.id === targetId); if (!u || !v || u.side !== playerSideOf(B)) return fail('Not your unit.'); if (u.acted) return fail('That unit has already fought today.'); const r = BATTLE.attackUnit(B, u, v, battleCtx(B), opts); if (r) BATTLE.checkOver(B, battleCtx(B)); if (B.over) finishBattle(B); return r ? ok('Attack made.') : fail('Out of reach.'); }
   function battleRam(city, unitId, c, r) { const B = battleFor(city); if (!B || B.phase !== 'player') return fail('Begin the day first.'); const u = B.units.find((x) => x.id === unitId); if (!u || u.side !== playerSideOf(B)) return fail('Not your unit.'); return BATTLE.ramGate(B, u, c, r) ? ok('The ram strikes.') : fail('No gate to ram from there.'); }
   function battleWithdraw(city) { const B = battleFor(city); if (!B || B.over) return fail('No battle.'); const ps = playerSideOf(B); if (!ps) return fail('Not your battle.'); BATTLE.withdraw(B, ps, battleCtx(B)); finishBattle(B); return ok(ps === 'A' ? 'The siege is abandoned.' : 'The garrison slips away and the city is lost.'); }
 
@@ -1968,11 +2070,17 @@ const Game = (() => {
       const extra = p.troops - BATTLE.sideTroops(B, 'D');
       if (extra > 500) { BATTLE.addArrival(B, { side: 'D', fid: B.defF, from: B.city, troops: extra, food: 0, officers: [], training: p.training, days: 1, exit: null }); p.troops -= extra; }
       B.dayInMonth = 0; B.phase = 'idle';
-      if (!playerSideOf(B)) runBattleMonth(B);
+      if (!playerSideOf(B) && !B.awaitPlayer) runBattleMonth(B);
     }
   }
   // the player's unfinished battles are fought out by the AI before the month can end
-  function autoResolvePlayerBattles() { for (const B of playerBattles()) battleAutoMonth(B.city); }
+  function autoResolvePlayerBattles() {
+    for (const B of playerBattles()) battleAutoMonth(B.city);
+    // allies' battles that waited on the player's answer: an unanswered plea from a house owed a favour is remembered
+    for (const a of S.pendingAid || []) { const B = S.battles[a.city]; const helped = B && B.helpers && B.helpers[S.player]; if (!helped && favorsOwed(S.player, a.from) > 0) shiftRelation(S.player, a.from, -3); }
+    S.pendingAid = [];
+    for (const B of Object.values(S.battles)) if (B.awaitPlayer && !B.over) { B.awaitPlayer = false; runBattleMonth(B); }
+  }
 
   function endTurn() {
     S.notices = [];
@@ -2403,6 +2511,9 @@ const Game = (() => {
   function aiPrisoners(fid) {
     for (const c of [...S.pendingCaptives]) {
       if (c.captor !== fid) continue;
+      const o0 = off(c.name);
+      if (o0 && c.from === S.player && !c.ransomAsked && S.factions[S.player] && S.factions[S.player].alive && factionProvinces(S.player).length && Math.random() < 0.5) { c.ransomAsked = true; S.pendingProposals.push({ from: fid, type: 'ransom', officer: c.name, price: ransomPrice(o0), envoy: (rulerOf(fid) || { name: fname(fid) }).name }); continue; }
+      if (c.ransomAsked && S.pendingProposals.some((pr) => pr.type === 'ransom' && pr.officer === c.name)) continue;   // waiting on the answer
       let w = { recruit: 0.7, release: 0.22, execute: 0.08 };
       if (has(fid, 'honourable')) w = { recruit: 0.5, release: 0.5, execute: 0 };
       if (has(fid, 'schemer')) w = { recruit: 0.85, release: 0.12, execute: 0.03 };
@@ -2422,6 +2533,7 @@ const Game = (() => {
     aiAppoint(fid);
     aiPlots(fid);
     if (tacticalOn()) aiReinforceBattles(fid);
+    aiRepayFavors(fid);
     const hostile = (n) => n.owner !== fid && canAttack(fid, n.owner);
     const comps = realmComponents(fid);
     const phase = detectPhase(fid);
@@ -2565,7 +2677,7 @@ const Game = (() => {
     if (!parsed.provinces || Object.keys(parsed.provinces).length !== PROVINCES.length || PROVINCES.some((p) => !parsed.provinces[p.id])) return false;
     S = parsed;
     // older saves: backfill fields added later
-    S.diplomacy = S.diplomacy || {}; S.pendingProposals = S.pendingProposals || []; S.pendingSuccession = S.pendingSuccession || null;
+    S.diplomacy = S.diplomacy || {}; S.pendingProposals = S.pendingProposals || []; S.pendingSuccession = S.pendingSuccession || null; S.favors = S.favors || {}; S.pendingAid = S.pendingAid || []; S.battles = S.battles || {};
     S.options = S.options || { historicalDeaths: true };
     S.adj = buildAdj();
     for (const f of Object.values(S.factions)) { const d = FACTIONS.find((x) => x.id === f.id); if (f.raider == null) f.raider = !!(d && d.raider); if (f.wanderer == null) f.wanderer = !!(d && d.wanderer); if (f.prestige == null) f.prestige = 0; if (f.guest == null) { f.guest = false; f.host = null; f.guestSince = 0; } if (f.hasEmperor == null) f.hasEmperor = false; if (f.favor == null) f.favor = f.guest ? 50 : 0; if (!f.household) f.household = { troops: 0, gold: 0 }; if (f.petitionUntil == null) f.petitionUntil = 0; const dd = FACTIONS.find((x) => x.id === f.id); if (!f.persona) f.persona = (dd && dd.persona) || []; if (f.treachery == null) f.treachery = 0; if (f.lastLoss == null) f.lastLoss = -99; if (f.lastAttackTurn == null) f.lastAttackTurn = -99; if (f.caution == null) f.caution = 1; if (!f.phase) f.phase = 'rising'; if (!f.attackedBy) f.attackedBy = {}; if (!f.gains) f.gains = []; }
@@ -2593,7 +2705,7 @@ const Game = (() => {
     decide, objectiveStatus, destinyTargets,
     itemsOf, hiddenItemsIn, itemData, bestow, ITEMS, governorOf, leaderHouse, houseItems, giftItem, itemValue,
     SCENARIOS, undoMonth, canUndo, slotInfo, BIOS, CITY_NOTES, detectPhase,
-    pacify, resettle, setPosture, battleFor, playerBattles, playerSideOf, battleRequests, battleMessengers, reinforceBattle, battleBeginDay, battleEndDay, battleAutoMonth, battleMove, battleAttack, battleRam, battleWithdraw, tacticalOn, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
+    pacify, resettle, setPosture, battleFor, playerBattles, playerSideOf, battleRequests, battleMessengers, reinforceBattle, battleBeginDay, battleEndDay, battleAutoMonth, battleMove, battleAttack, battleRam, battleWithdraw, tacticalOn, battleAnswerChallenge, battleSuborn, battleSubornTargets, battleGold, favorsOwed, declineAid, ransomPrice, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
     hostSeat, exileServe, exilePetition, petitionChance, exileRecruit, exileRaise, exileFight, exileSeekPatron, exileTargets, exileSeize,
     getOption: (k) => !!(S && S.options && S.options[k]),
     setOption: (k, v) => { if (S) { S.options = S.options || {}; S.options[k] = !!v; log(`${k === 'historicalDeaths' ? 'Scripted historical deaths' : k} ${v ? 'enabled' : 'disabled'}.`, 'sys'); } },

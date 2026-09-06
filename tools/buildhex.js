@@ -187,6 +187,27 @@ const r1 = (v) => Math.round(v * 100) / 100;
     // 4. the city and its walls
     const inner = P.tier >= 3 ? 1 : 0;
     for (const h of cells) { const d = hexDist(h.c, h.r, CC, CR); if (d <= inner) terrain[h.r * W + h.c] = 'C'; else if (d === inner + 1) terrain[h.r * W + h.c] = 'W'; }
+    // 4b. rivers run unbroken: every hex a river line passes through is water, joined hex to hex so there are no gaps,
+    //     and a river cuts through the wall ring and the town itself if that is where it flows (the city's heart is kept)
+    const nearestHex = (x, y) => { let best = null, bd = 1e9; for (const h of cells) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } } return bd <= HEX_KM * 0.62 ? best : null; };
+    for (const rv of rivers) {
+      const code = rv.r <= 6 ? 'r' : 's'; let prev = null;
+      for (let i = 0; i < rv.pts.length - 1; i++) {
+        const [x1, y1] = rv.pts[i], [x2, y2] = rv.pts[i + 1]; const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (HEX_KM * 0.25)));
+        for (let k = 0; k <= n; k++) {
+          const h = nearestHex(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n); if (!h) { prev = null; continue; }
+          const path = prev && (prev.c !== h.c || prev.r !== h.r) ? hexLine(prev.c, prev.r, h.c, h.r) : [[h.c, h.r]];
+          for (const [c, r] of path) {
+            const j = r * W + c; const t = terrain[j];
+            if (c === CC && r === CR) continue;                       // the heart of the city stays dry
+            if (t === '~' || t === 'l' || t === 'r') continue;         // already water
+            if (t === 's' && code === 'r') { terrain[j] = 'r'; continue; }
+            if (t !== 's') terrain[j] = code;
+          }
+          prev = h;
+        }
+      }
+    }
     // 5. roads toward the neighbours
     const roads = new Array(W * H).fill(0); const exits = [];
     for (const { to, type } of adj[P.id] || []) {
