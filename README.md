@@ -767,7 +767,9 @@ across alone. Each officer can be approached once a battle; a refusal hardens
 him a little. The AI writes letters too when it has gold to spare.
 
 **Officers of a broken unit** mostly escape (about two thirds); some are taken
-prisoner and a few fall. Prisoners are judged at the month's end: release,
+prisoner and a few fall. When a city falls, its officers get away to a friendly
+city next door nineteen times in twenty; with no such refuge only six in ten
+escape, and the rest are taken. Prisoners are judged at the month's end: release,
 execute, **ransom** (a price from 300 gold upward by the officer's stats, which
 his house pays if it can afford it and thinks him worth it) or recruit, which is
 only possible when his loyalty is below 70 or his house is gone. An AI house
@@ -794,6 +796,22 @@ ends (the battle waits for your answer): send help from the city panel or the
 rider's prompt, or decline, which costs relations, dearly if you owed them.
 Favours are repaid by marching in turn or with a gift worth 400 or more (gold,
 or food at a tenth of its weight); the AI repays with gifts when it has gold.
+
+**Commanders.** Each unit fights in the temper of the officer who leads it,
+shown on the unit's card. A *rash* officer (WAR 85 or more, INT under 60)
+attacks whatever is in front of him at any odds, never retreats, chases broken
+enemies, calls out and answers every champion, and neither loots nor burns. A
+*bold* one (WAR 80 or more, or a cavalry officer of 70 or more) seeks the melee
+and the enemy's captains, fights at longer odds, accepts most duels and loves a
+night assault. A *cautious* one (INT 80 or more, WAR under 75) keeps to forest
+and hills near the enemy ready to ambush, strikes where a friend is already
+engaged, shoots rather than closes, burns and writes letters readily, draws a
+worn unit out of reach, and declines a duel unless plainly the stronger. A
+*steady* one (LDR 78 or more) fights at fair odds, keeps the bowmen and engines
+behind the foot, holds the gates and heartens the men beside him each evening.
+A unit without an officer is timid and never loots or burns. The best leader on
+each side sets the army's plan: a rash or bold army assaults sooner and by
+night, a cautious one waits for better odds and burns the ground first.
 
 **Kinds of unit.** An army is foot, horse and bowmen: a tenth of the column rides
 (three tenths from horse country, a tenth more with a pasture) and a fifth carry

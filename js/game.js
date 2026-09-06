@@ -833,12 +833,15 @@ const Game = (() => {
       const exile = destroyed && S.factions[defF].wanderer;
       const flight = destroyed && !exile && S.adj[R.to].some((n) => !prov(n).owner);   // a masterless city next door: the remnant seizes it
       const escapees = [];
+      // officers of a fallen city nearly always get away when a friendly city lies next door; with no such refuge, only six in ten
+      const friendlyNext = S.adj[R.to].some((n) => prov(n).owner === defF);
+      const pFlee = friendlyNext ? 0.95 : 0.6;
       for (const o of defOfficers.filter((x) => S.officers[x.name])) {
         const ruler = isRuler(o);
         const swift = canEscape(o);
-        if ((exile || flight) && (swift || Math.random() < (ruler ? 0.9 : 0.7))) {
+        if ((exile || flight) && (swift || Math.random() < (ruler ? 0.9 : 0.6))) {
           escapees.push(o);
-        } else if (!destroyed && (swift || Math.random() < (ruler ? 0.75 : 0.6))) {
+        } else if (!destroyed && (swift || Math.random() < (ruler ? Math.max(pFlee, 0.75) : pFlee))) {
           const refuge = nearestOwnedCity(R.to, defF);
           o.city = refuge.id;
           L(`${o.name} escapes to ${pname(refuge.id)}${swift ? ' on his famous horse' : ''}.`);
