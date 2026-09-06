@@ -1,7 +1,7 @@
 # Romance of the Three Kingdoms
 
 A browser-based, turn-based strategy game set in 190 AD, the year the coalition
-rose against Dong Zhuo. Pick one of 22 warlords and unite the 56 cities of China (two more houses, the Wuhuan and Xianbei nomads, are AI-only).
+rose against Dong Zhuo. Pick one of 22 warlords and unite the 58 cities of China (two more houses, the Wuhuan and Xianbei nomads, are AI-only).
 
 ## The map
 
@@ -40,17 +40,19 @@ GeoJSON files into `tools/naturalearth/` on first use and writes `js/geo.js`,
 and `node tools/buildrelief.js`, which fetches a hundred elevation tiles into
 `tools/relief-tiles/` and writes `img/relief.png`. Neither needs any package.
 
-Fifty-six cities span from Xiangping in Liaodong to Jiaozhi on the Gulf of
+Fifty-eight cities span from Xiangping in Liaodong to Jiaozhi on the Gulf of
 Tonkin, with passes such as Hongnong, Wudu, Shangyong, Zitong and Yong'an
 guarding the routes between regions, and Jiangling, Chaisang and Jianye
-anchoring the Yangtze. The latest ten fill the gaps the real map exposed:
+anchoring the Yangtze. The latest twelve fill the gaps the real map exposed:
 Pengcheng, the true capital of Xu; Lingling, fourth of the southern Jing
 commanderies; Hedong on the Fen and Shangdang on the Taihang, tying the
 north-west to the north; Danyang and Guangling either side of the lower
 Yangtze; Longxi and Wudu on the Shu-Wei frontier; Zangke, which links Nanzhong
-to the south; and Hepu on the pearl coast between Nanhai and Jiaozhi.
+to the south; Hepu on the pearl coast between Nanhai and Jiaozhi; Jian'an behind the Wuyi
+mountains on the Fujian coast; and Donglai at the tip of Shandong, with its sea
+road to Liaodong.
 
-The 107 roads were laid out on the real geography: rivers are crossed where
+The 112 roads were laid out on the real geography: rivers are crossed where
 the fords and ferries were (Puban, Mengjin, the Three Gorges, the Qiantang),
 passes sit where the mountains force them (Tong, Hukou, Jingxing, Yanmen,
 Juyong, Wusheng, Meiling, the Lingqu canal), and long diagonal roads of the
