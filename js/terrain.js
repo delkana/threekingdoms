@@ -18,6 +18,8 @@ const TERRAIN = (() => {
   let seed = 20250904;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const pts = (arr) => arr.map((p) => `${f1(p[0])},${f1(p[1])}`).join(' ');
+  // the relief image carries the same version stamp the server put on this script, so it is never a stale cached copy
+  const RELIEF_V = (() => { try { const v = document.currentScript && document.currentScript.src.split('?v=')[1]; return v ? '?v=' + v : ''; } catch (e) { return ''; } })();
 
   // The Great Wall of the Han, roughly, from the Hexi corridor to Liaodong
   const WALL = [[100.6, 39.9], [103.6, 38.6], [105.9, 37.5], [107.6, 37.9], [109.7, 39.4], [111.6, 40.2], [113.9, 40.5], [116.0, 40.6], [118.2, 40.5], [119.9, 40.3], [121.4, 41.0], [123.0, 41.6]].map((c) => P(...c));
@@ -103,7 +105,7 @@ const TERRAIN = (() => {
       <path d="${LAND_PATH}" fill="none" stroke="#8fc3dc" stroke-width="12" opacity="0.28" filter="url(#coastGlow)"/>
       <path d="${LAND_PATH}" fill="url(#landGrad)"/>
       <g clip-path="url(#landClip)">
-        <image href="img/relief.png" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>
+        <image href="img/relief.png${RELIEF_V}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none"/>
         <polygon points="${pts(STEPPE)}" fill="url(#dunes)" opacity="0.7"/>
       </g>
       <g id="territory-slot"></g>
