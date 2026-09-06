@@ -110,7 +110,6 @@ const ROADS = [
   // the north-west: Hexi corridor, Tao and Wei valleys, the Long mountains
   ['xiliang', 'longxi', 'plain'],
   ['xiliang', 'tianshui', 'plain'],
-  ['xiliang', 'changan', 'plain'],          // the Anding road along the Jing valley
   ['longxi', 'tianshui', 'pass'],
   ['longxi', 'wudu', 'pass'],               // over the Min mountains
   ['tianshui', 'changan', 'pass'],          // the Long pass into the Wei valley
@@ -152,7 +151,6 @@ const ROADS = [
   ['pingyuan', 'beihai', 'plain'],
   ['beihai', 'langya', 'pass'],             // round Mount Tai
   ['beihai', 'donglai', 'plain'],           // out along the Shandong peninsula
-  ['donglai', 'xiangping', 'sea'],          // across the strait to Liaodong
   // the central plain and Xu
   ['puyang', 'chenliu', 'plain'],
   ['puyang', 'xiaopei', 'plain'],
@@ -970,7 +968,7 @@ const CITY_NOTES = {
   zangke: 'The Nanzhong hills between Yi and the south, where the Zangke river runs toward the sea.',
   hepu: 'The pearl coast on the Gulf of Tonkin, the sea road between Nanhai and Jiaozhi.',
   jianan: 'Minzhong behind its mountains, Shanyue country where Wang Lang fled and He Qi later campaigned.',
-  donglai: 'The tip of the Shandong peninsula, Taishi Ci’s home, with the sea road to Liaodong.',
+  donglai: 'The tip of the Shandong peninsula, Taishi Ci’s home at the end of the peninsula road.',
   luoyang: 'The eastern capital of the Han, burned by Dong Zhuo in 190 and never the same again.',
   changan: 'The western capital, seat of the court after 190, wrecked by the feuds of Dong Zhuo\u2019s generals.',
   xuchang: 'Cao Cao\u2019s capital from 196, where the puppet Emperor lived out his reign.',
