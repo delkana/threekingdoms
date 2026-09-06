@@ -338,6 +338,22 @@ const EVENTS = [
   },
   // ---------------------------------------------------------- Dong Zhuo
   {
+    id: 'coalition', title: 'The coalition against Dong Zhuo',
+    from: [190, 1], to: [190, 3],
+    when: (E, S) => {
+      const dz = S.factions.dongzhuo; if (!dz || !dz.alive) return null;
+      const members = ['yuanshao', 'yuanshu', 'caocao', 'sunjian', 'liudai', 'zhangyang', 'zhangchao', 'kongrong', 'taoqian', 'liubei'].filter((f) => S.factions[f] && S.factions[f].alive && !S.factions[f].guest);
+      return members.length >= 3 ? { members } : null;
+    },
+    apply: (E, S, ctx) => {
+      for (const a of ctx.members) for (const b of ctx.members) if (a < b) E.shiftRelation(a, b, 15);
+      for (const f of ctx.members) { E.shiftRelation(f, 'dongzhuo', -20); if (E.bordering(f, 'dongzhuo')) E.warTarget(f, 'dongzhuo', 12); }
+      E.prestige('yuanshao', 10);
+      const names = ctx.members.filter((f) => f !== 'yuanshao').map((f) => E.fname(f));
+      return `At Suanzao the lords swear an oath against Dong Zhuo and elect Yuan Shao their leader. ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} raise their banners with him, Zhang Chao of Guangling among the first, and Sun Jian marches north.`;
+    },
+  },
+  {
     id: 'burn-luoyang', title: 'The burning of Luoyang',
     from: [190, 3], to: [191, 6],
     when: (E, S) => { const dz = S.factions.dongzhuo; return dz && dz.alive && S.provinces.luoyang.owner === 'dongzhuo' && S.provinces.changan.owner === 'dongzhuo' ? {} : null; },

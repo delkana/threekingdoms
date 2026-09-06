@@ -412,7 +412,7 @@ const OFFICERS = [
 
 // Starting relations between houses (-100 hostile .. 100 close). Unlisted pairs start at 0.
 const INITIAL_RELATIONS = [
-  ['zhangchao', 'caocao', 20], ['zhangchao', 'taoqian', 15], ['zhangchao', 'yuanshu', -25], ['zhangchao', 'dongzhuo', -40],
+  ['zhangchao', 'caocao', 20], ['zhangchao', 'taoqian', 15], ['zhangchao', 'yuanshu', -25], ['zhangchao', 'dongzhuo', -40], ['zhangyang', 'dongzhuo', -30],
   ['yuanshao', 'yuanshu', -40],
   ['caocao', 'yuanshao', 25],
   ['liubei', 'gongsunzan', 35],
@@ -1010,7 +1010,7 @@ const CITY_NOTES = {
 
 // Historical flavour shown at the start of certain months.
 const HISTORY_NOTES = {
-  '190-1': 'Yuan Shao is elected leader of the coalition against Dong Zhuo. Sun Jian marches north.',
+  '190-1': 'The lords of the east gather at Suanzao against Dong Zhuo.',
   '190-4': "Dong Zhuo burns Luoyang and drags the court west to Chang'an.",
   '191-1': 'Sun Jian finds the Imperial Seal in the ruins of Luoyang.',
   '192-4': "Wang Yun's plot: Lü Bu turns on Dong Zhuo.",

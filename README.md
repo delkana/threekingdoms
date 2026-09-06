@@ -162,6 +162,10 @@ envoys. The screen also lists the historical events that have fired.
 Events fire on their dates when the map allows. Some are **decisions**: the
 player's house is asked, the AI chooses by weighted odds.
 
+- **The coalition** (190): the eastern lords swear their oath at Suanzao under
+  Yuan Shao. Yuan Shu, Cao Cao, Sun Jian, Liu Dai, Zhang Yang, Zhang Chao,
+  Kong Rong, Tao Qian and Liu Bei warm to one another, turn against Dong Zhuo,
+  and those on his borders take him as their war aim for a year.
 - **Liu Bei**: Tao Qian bequeaths Xu Province; Liu Biao grants Xinye; three
   visits win Zhuge Liang; Liu Zhang invites him into Shu (decision).
 - **The Sun**: Sun Quan comes of age; the Jiangdong expedition (decision) trades
