@@ -64,8 +64,10 @@ const BATTLE = (() => {
 
   // Defenders hold the gates first, then the walls, then the city itself, then the ground just outside.
   function deployDefender(map, units, exit = null) {
-    const at = (c, r) => map.terrain[r * map.w + c]; const spots = []; const prio = { G: 0, W: 1, C: 2 };
-    for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) { const t = at(c, r); if (t in prio) spots.push({ c, r, p: prio[t], d: hexDist(c, r, 6, 5), e: exit ? hexDist(c, r, exit.c, exit.r) : 0 }); }
+    const at = (c, r) => map.terrain[r * map.w + c]; const spots = []; const prio = { G: 2, W: 3, C: 4 };
+    for (let r = 0; r < map.h; r++) for (let c = 0; c < map.w; c++) { const t = at(c, r); if (t in prio) spots.push({ c, r, p: c === 6 && r === 5 ? 1 : prio[t], d: hexDist(c, r, 6, 5), e: exit ? hexDist(c, r, exit.c, exit.r) : 0 }); }
+    // the gate nearest the enemy's road comes first, then the heart of the city (holding it is what keeps the city), then the other gates and the walls
+    const gatesSorted = spots.filter((x) => x.p === 2).sort((a, b) => a.e - b.e); if (gatesSorted.length) gatesSorted[0].p = 0;
     spots.sort((a, b) => a.p - b.p || a.e - b.e || a.d - b.d);
     const out = []; const used = new Set();
     for (const s of spots) { if (out.length >= units.length) break; out.push({ c: s.c, r: s.r, troops: units[out.length] }); used.add(`${s.c},${s.r}`); }
@@ -378,7 +380,7 @@ const BATTLE = (() => {
     cautious: { label: 'Cautious', desc: 'Keeps to cover and high ground, strikes where a friend is already engaged, shoots rather than closes, burns and writes letters, pulls back when the unit is worn, and declines duels unless plainly the stronger.' },
     steady:   { label: 'Steady',   desc: 'Holds the line: fights at fair odds, keeps bowmen and engines behind the foot, holds gates, and steadies the men beside him each evening.' },
     plain:    { label: 'Plain',    desc: 'An ordinary commander: fights at fair odds and follows the army\'s plan.' },
-    unled:    { label: 'Unled',    desc: 'No officer: timid in attack, and it neither loots nor burns.' },
+    unled:    { label: 'Unled',    desc: 'No officer of its own: it takes its orders, and its temper, from the army’s chief general.' },
   };
   const commanderOf = (B, u, ctx) => u.officers.map((n) => ctx.officer(n)).filter((o) => o && !(B.wounded && B.wounded[o.name])).sort((a, b) => b.ldr - a.ldr)[0] || null;
   function temperOf(B, u, ctx) {
@@ -554,13 +556,13 @@ const BATTLE = (() => {
     for (const u of mine) {
       if (!B.units.includes(u)) continue;
       if (u.naval) { aiShip(B, u, side, ctx, gates, centre); continue; }
-      const tp = temperOf(B, u, ctx);
+      const own = temperOf(B, u, ctx); const tp = own === 'unled' ? plan : own;   // a unit without an officer follows the chief general's temper
       // targets: the weakest first, but a cautious commander strikes where a friend is already engaged, a bold one seeks the enemy's captains,
       // and a steady one goes to a neighbour's aid
       const menace = (v) => strength(B, v, ctx) * (1 + defenceBonus(B, v)) * (tp === 'cautious' ? 1 / (1 + 0.5 * friendsBeside(B, v, side)) : 1) * ((tp === 'bold' || tp === 'rash') && v.officers.length ? 0.8 : 1) * (tp === 'steady' && friendsBeside(B, v, side) ? 0.7 : 1);
       const targets = targetsFor(B, u).sort((a, b) => menace(a) - menace(b));
       const attackable = targets.filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1);
-      const worthK = side === 'A' ? ({ rash: 0.5, bold: 0.55, cautious: 0.95, steady: 0.8, unled: 0.9 }[tp] || 0.7) : ({ rash: 0.7, bold: 0.75, cautious: 1.1, steady: 0.9, unled: 1.0 }[tp] || 0.9);
+      const worthK = (side === 'A' ? ({ rash: 0.5, bold: 0.55, cautious: 0.95, steady: 0.8 }[tp] || 0.7) : ({ rash: 0.7, bold: 0.75, cautious: 1.1, steady: 0.9 }[tp] || 0.9)) * (own === 'unled' ? 1.1 : 1);   // leaderless men are a little more careful
       const worth = (v) => strength(B, u, ctx) >= strength(B, v, ctx) * (1 + defenceBonus(B, v)) * worthK;
       // a worn unit under a cautious commander pulls back out of reach
       if (tp === 'cautious' && (u.troops < u.max * 0.4 || u.morale < 40) && attackable.length && !insideWalls(terrainAt(B, u.c, u.r))) {
@@ -586,9 +588,35 @@ const BATTLE = (() => {
           if (B.field) { log(B, 'The garrison falls back behind its walls.', 'def'); B.field = false; }
         }
         // an unheld gate with enemies at it: the nearest wall unit steps onto it
-        if (insideWalls(t) && t !== 'G') {
+        if (insideWalls(t) && t !== 'G' && !(u.c === 6 && u.r === 5)) {   // the heart's guard does not leave it
           const threatened = gates.map((k) => k.split(',').map(Number)).filter(([gc, gr]) => !unitAt(B, gc, gr) && !gateOpen(B, gc, gr) && foes.some((f) => hexDist(f.c, f.r, gc, gr) <= 2)).sort((a, b) => hexDist(u.c, u.r, a[0], a[1]) - hexDist(u.c, u.r, b[0], b[1]));
           if (threatened.length && hexDist(u.c, u.r, threatened[0][0], threatened[0][1]) <= 2 && !mine.some((o) => o !== u && hexDist(o.c, o.r, threatened[0][0], threatened[0][1]) < hexDist(u.c, u.r, threatened[0][0], threatened[0][1]))) { const step = stepToward(B, u, [key(threatened[0][0], threatened[0][1])]); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); } }
+        }
+        // the heart of the city: the unit standing on it holds it (and fights only at fair odds); the gates keep their guards;
+        // every other defender inside the walls goes for an enemy who has reached the heart, at lenient odds; and once the walls
+        // are breached the nearest free defender goes to stand on the heart if it is empty
+        const heartFoes = foes.filter((f) => hexDist(f.c, f.r, 6, 5) <= 1);
+        const centreUnit = unitAt(B, 6, 5); const breached = anyGateOpen(B) || foes.some((f) => insideWalls(terrainAt(B, f.c, f.r)));
+        const onHeart = u.c === 6 && u.r === 5;
+        const lenient = (v) => strength(B, u, ctx) >= strength(B, v, ctx) * (1 + defenceBonus(B, v)) * worthK * 0.75;
+        if (onHeart) {
+          if (attackable.length && worth(attackable[0])) { melee(B, u, attackable[0], ctx); continue; }
+          if (targets.length && canShoot(B, u)) { fight(B, u, targets[0], ctx, true); continue; }
+          continue;   // hold the heart
+        }
+        if (heartFoes.length && t !== 'G') {
+          const tgt = attackable.find((v) => heartFoes.includes(v) && lenient(v)); if (tgt) { melee(B, u, tgt, ctx); continue; }
+          const shot = targets.find((v) => heartFoes.includes(v)); if (shot && canShoot(B, u)) { fight(B, u, shot, ctx, true); continue; }
+          if (!foes.some((f) => hexDist(f.c, f.r, u.c, u.r) === 1)) {
+            const goals = (!centreUnit ? [centre] : []).concat(heartFoes.flatMap((f) => neighbours(f.c, f.r, m.w, m.h).filter(([c, r]) => !unitAt(B, c, r) && insideWalls(terrainAt(B, c, r))).map(([c, r]) => key(c, r))));
+            const step = stepToward(B, u, goals);
+            if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); const again = targetsFor(B, u).filter((v) => hexDist(u.c, u.r, v.c, v.r) === 1 && heartFoes.includes(v) && lenient(v)); if (again.length && !u.acted) melee(B, u, again[0], ctx); continue; }
+          }
+        }
+        const inside = foes.some((f) => insideWalls(terrainAt(B, f.c, f.r)));
+        if (breached && !centreUnit && insideWalls(t) && (t !== 'G' || inside) && !attackable.length) {
+          const guardian = mine.filter((f) => !f.naval && insideWalls(terrainAt(B, f.c, f.r)) && (terrainAt(B, f.c, f.r) !== 'G' || inside) && !foes.some((e) => hexDist(e.c, e.r, f.c, f.r) === 1)).sort((a, b) => hexDist(a.c, a.r, 6, 5) - hexDist(b.c, b.r, 6, 5) || (terrainAt(B, a.c, a.r) === 'G') - (terrainAt(B, b.c, b.r) === 'G'))[0];
+          if (guardian === u) { const step = stepToward(B, u, [centre]); if (step) { const [c, r] = step.split(',').map(Number); moveUnit(B, u, c, r); if (targetsFor(B, u).length && canShoot(B, u) && !u.acted) fight(B, u, targetsFor(B, u)[0], ctx, true); continue; } }
         }
         if (targets.length && (!attackable.length || (tp === 'cautious' && canShoot(B, u) && !worth(attackable[0])))) { if (canShoot(B, u) || !attackable.length) { fight(B, u, targets[0], ctx, canShoot(B, u)); continue; } }   // volley from the walls
         if (attackable.length && (worth(attackable[0]) || !insideWalls(t) || tp === 'rash')) { melee(B, u, attackable[0], ctx); continue; }
@@ -598,9 +626,9 @@ const BATTLE = (() => {
       // attacker
       const stalled = B.day - (B.lastBlood || 0) > 14;   // a fortnight without a fight: no more waiting
       const assault = ratio >= assaultAt || foodDays < 4 || ((!pending || stalled) && ratio >= (plan === 'cautious' ? 0.75 : plan === 'rash' ? 0.5 : 0.6));
-      const sackP = { rash: 0, bold: 0.15, cautious: 0.5, unled: 0 }[tp]; if (sackable(B, u) && tp !== 'unled' && tp !== 'rash' && (ratio < 1 || B.day > 10 || foodDays < 10 || Math.random() < (sackP == null ? 0.3 : sackP))) { sack(B, u, ctx); continue; }   // loot while the walls hold
+      const sackP = { rash: 0, bold: 0.15, cautious: 0.5 }[tp]; if (sackable(B, u) && tp !== 'rash' && (ratio < 1 || B.day > 10 || foodDays < 10 || Math.random() < (sackP == null ? 0.3 : sackP))) { sack(B, u, ctx); continue; }   // loot while the walls hold
       // fire: burn the cover an enemy stands in, or the fields beside him; the cunning burn readily, the fierce would rather fight
-      const ft = tp === 'unled' || tp === 'rash' ? [] : fireTargets(B, u).filter(([c, r]) => { const v = unitAt(B, c, r); return (v && v.side !== side) || neighbours(c, r, m.w, m.h).some(([a, b]) => { const w = unitAt(B, a, b); return w && w.side !== side; }); });
+      const ft = tp === 'rash' ? [] : fireTargets(B, u).filter(([c, r]) => { const v = unitAt(B, c, r); return (v && v.side !== side) || neighbours(c, r, m.w, m.h).some(([a, b]) => { const w = unitAt(B, a, b); return w && w.side !== side; }); });
       if (ft.length && Math.random() < ({ cautious: 0.5, bold: 0.15 }[tp] || 0.25)) { setFire(B, u, ft[0][0], ft[0][1], ctx); continue; }
       // formation: under a steady or cautious leader the bowmen and engines keep behind the foot
       if ((kindOf(u) === 'arc' || kindOf(u) === 'eng') && (plan === 'steady' || plan === 'cautious') && hexDist(u.c, u.r, 6, 5) <= lineDist && !(targets.length && canShoot(B, u))) continue;
@@ -711,6 +739,7 @@ const BATTLE = (() => {
   }
   function endDay(B, ctx) {
     settleSites(B, ctx);
+    const heartUnit = unitAt(B, 6, 5); if (heartUnit) { if (heartUnit.side !== (B.heartHolder || 'D')) log(B, heartUnit.side === 'A' ? `The banner over the heart of ${ctx.pname(B.city)} comes down; the besiegers raise their own.` : `The garrison tears down the enemy's banner and raises its lord's over the heart of the city again.`, heartUnit.side === 'A' ? 'att' : 'def'); B.heartHolder = heartUnit.side; }
     spreadFires(B, ctx);
     // orators steady the men around them
     for (const u of B.units) if (hasSkillOn(B, u, 'orator', ctx)) for (const f of B.units) if (f.side === u.side && hexDist(f.c, f.r, u.c, u.r) <= 2) f.morale = Math.min(100, f.morale + 2);
@@ -733,7 +762,7 @@ const BATTLE = (() => {
     B.arrivals = B.arrivals.filter((x) => !x.done);
     checkOver(B, ctx);
     ctx.syncCity(B);
-    if (B.replay) B.replay.push({ day: B.day, units: B.units.map((u) => ({ id: u.id, side: u.side, fid: u.fid, troops: u.troops, officers: u.officers.slice(0, 1), c: u.c, r: u.r, kind: u.kind, naval: u.naval })), gates: { ...B.gates }, fires: { ...(B.fires || {}) }, burnt: { ...(B.burnt || {}) }, weather: B.weather, night: B.night, fights: (B.fights || []).slice(), log: B.log.filter((l) => l.day === B.day).map((l) => l.text) });
+    if (B.replay) B.replay.push({ day: B.day, units: B.units.map((u) => ({ id: u.id, side: u.side, fid: u.fid, troops: u.troops, officers: u.officers.slice(0, 1), c: u.c, r: u.r, kind: u.kind, naval: u.naval })), gates: { ...B.gates }, fires: { ...(B.fires || {}) }, burnt: { ...(B.burnt || {}) }, weather: B.weather, night: B.night, heart: B.heartHolder || 'D', fights: (B.fights || []).slice(), log: B.log.filter((l) => l.day === B.day).map((l) => l.text) });
   }
   // a whole day with both sides played by the AI (or one side by the AI when the other has already acted)
   function runDay(B, ctx, playerSide = null) {
@@ -751,7 +780,7 @@ const BATTLE = (() => {
     const B = { city, attF, defF, day: 0, dayInMonth: 0, startedTurn: ctx.turn(), nextId: 0, units: [], arrivals: [], gates: {}, captives: [], log: [], over: null, walls,
       att: { fid: attF, from: fromCity, food, start: troops, fled: 0, exit, control: control.A, asked: false, fleet },
       def: { fid: defF, fled: 0, exit: null, control: control.D, asked: false, fleet: cityFleet }, replay: record ? [] : null,
-      sites: sites.map((x, i) => ({ i, type: x.type, c: x.c, r: x.r, damaged: !!x.damaged, holder: 'D' })), season, north, fog, siegecraft, field, weather: 'clear', fires: {}, burnt: {}, fights: [] };
+      sites: sites.map((x, i) => ({ i, type: x.type, c: x.c, r: x.r, damaged: !!x.damaged, holder: 'D' })), season, north, fog, siegecraft, field, weather: 'clear', fires: {}, burnt: {}, fights: [], heartHolder: 'D' };
     // the attacker: part of the army aboard ship when it has a fleet and there is water to sail
     const afloat = shipShare(troops, fleet, exit && (exit.type === 'river' || exit.type === 'sea'), m);
     const engMen = engines ? Math.min(1500, Math.floor(troops * 0.1)) : 0;

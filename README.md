@@ -809,8 +809,8 @@ engaged, shoots rather than closes, burns and writes letters readily, draws a
 worn unit out of reach, and declines a duel unless plainly the stronger. A
 *steady* one (LDR 78 or more) fights at fair odds, keeps the bowmen and engines
 behind the foot, holds the gates and heartens the men beside him each evening.
-A unit without an officer is timid and never loots or burns. The best leader on
-each side sets the army's plan: a rash or bold army assaults sooner and by
+A unit without an officer follows the chief general's temper, a little more
+carefully. The best leader on each side sets the army's plan: a rash or bold army assaults sooner and by
 night, a cautious one waits for better odds and burns the ground first.
 
 **Kinds of unit.** An army is foot, horse and bowmen: a tenth of the column rides
