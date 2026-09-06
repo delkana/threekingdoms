@@ -19,7 +19,7 @@ const EVENTS = [
       if (!lb || !lb.alive || !tq || !tq.alive) return null;
       if (S.provinces.xiapi.owner !== 'taoqian') return null;
       if (!(E.relation('liubei', 'taoqian') >= 10 || (lb.guest && lb.host === 'taoqian'))) return null;
-      return { cities: ['xiapi', 'xiaopei', 'langya'].filter((c) => S.provinces[c].owner === 'taoqian') };
+      return { cities: ['xiapi', 'xiaopei', 'langya', 'pengcheng'].filter((c) => S.provinces[c].owner === 'taoqian') };
     },
     apply: (E, S, ctx) => {
       const names = E.factionOfficers('taoqian').map((o) => o.name);

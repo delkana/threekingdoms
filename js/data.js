@@ -233,7 +233,7 @@ const FLOOD_PLAIN = ['puyang', 'pingyuan', 'chenliu', 'xiaopei', 'ye', 'nanpi'];
 const FACTIONS = [
   { id: 'caocao',     name: 'Cao Cao',     ruler: 'Cao Cao',     color: '#3b6fd6', aggr: 1.3, cities: ['chenliu'],              persona: ['schemer'], blurb: 'A brilliant, ruthless tactician with a loyal clan of generals.' },
   { id: 'liubei',     name: 'Liu Bei',     ruler: 'Liu Bei',     color: '#3fa34d', aggr: 0.9, cities: ['pingyuan'],             wanderer: true, persona: ['honourable'], blurb: 'A humble but charismatic scion of the Han, sworn brother to Guan Yu and Zhang Fei.' },
-  { id: 'sunjian',    name: 'Sun Jian',    ruler: 'Sun Jian',    color: '#d63b3b', aggr: 1.2, cities: ['changsha'],             wanderer: true, persona: ['reckless'], blurb: 'The Tiger of Jiangdong. Ferocious in battle, with a promising heir.' },
+  { id: 'sunjian',    name: 'Sun Jian',    ruler: 'Sun Jian',    color: '#d63b3b', aggr: 1.2, cities: ['changsha', 'lingling'],             wanderer: true, persona: ['reckless'], blurb: 'The Tiger of Jiangdong. Ferocious in battle, with a promising heir.' },
   { id: 'yuanshao',   name: 'Yuan Shao',   ruler: 'Yuan Shao',   color: '#f2e394', aggr: 1.0, cities: ['ye', 'nanpi'],          persona: ['cautious', 'builder'], blurb: 'Head of the most prestigious family in the empire. Wealthy and well-served.' },
   { id: 'dongzhuo',   name: 'Dong Zhuo',   ruler: 'Dong Zhuo',   color: '#3a3a3a', aggr: 1.4, cities: ['luoyang', 'changan', 'hongnong', 'hedong'],   emperor: true, persona: ['treacherous'], blurb: 'The tyrant who holds the Emperor. Commands Lü Bu, the mightiest warrior alive.' },
   { id: 'yuanshu',    name: 'Yuan Shu',    ruler: 'Yuan Shu',     color: '#e67e22', aggr: 1.1, cities: ['wan', 'shouchun'],      persona: ['treacherous'], blurb: "Yuan Shao's arrogant half-brother. Rich lands, mediocre officers." },
@@ -242,6 +242,7 @@ const FACTIONS = [
   { id: 'mateng',     name: 'Ma Teng',     ruler: 'Ma Teng',     color: '#8d5524', aggr: 1.1, cities: ['xiliang', 'tianshui', 'longxi'],           persona: ['reckless'], blurb: 'Lord of the frontier cavalry. His son Ma Chao is a rising terror.' },
   { id: 'gongsunzan', name: 'Gongsun Zan', ruler: 'Gongsun Zan', color: '#cfd8dc', aggr: 1.0, cities: ['beiping'],              persona: ['reckless'], blurb: 'Northern border general with the White Horse cavalry and young Zhao Yun.' },
   { id: 'taoqian',    name: 'Tao Qian',    ruler: 'Tao Qian',    color: '#e991b8', aggr: 0.5, cities: ['xiapi', 'langya', 'pengcheng'],                persona: ['honourable', 'builder'], blurb: 'Elderly, benevolent governor of Xu. Rich but poorly defended.' },
+  { id: 'zhangchao',  name: 'Zhang Chao',  ruler: 'Zhang Chao',  color: '#556b2f', aggr: 0.6, cities: ['guangling'],                                    persona: ['honourable', 'cautious'], blurb: 'Administrator of Guangling and a lord of the coalition. One city on the coast, and in Zang Hong a follower loyal to the death.' },
   { id: 'kongrong',   name: 'Kong Rong',   ruler: 'Kong Rong',   color: '#5dade2', aggr: 0.4, cities: ['beihai'],               persona: ['honourable', 'builder'], blurb: 'A famous Confucian scholar. No general himself, but Taishi Ci serves him.' },
   { id: 'zhanglu',    name: 'Zhang Lu',    ruler: 'Zhang Lu',    color: '#7f8c5a', aggr: 0.5, cities: ['hanzhong'],             persona: ['builder'], blurb: 'Theocratic ruler of Hanzhong, leader of the Five Pecks of Rice sect.' },
   { id: 'liuyao',     name: 'Liu Yao',     ruler: 'Liu Yao',     color: '#f1948a', aggr: 0.6, cities: ['wu', 'jianye'],                   persona: ['cautious'], blurb: 'Imperial clansman holding the rich lands south of the Yangtze.' },
@@ -336,6 +337,8 @@ const OFFICERS = [
   ['Tian Yu',      70, 65, 78, 76, 62, 'gongsunzan', 'beiping', 78, 171],
   // Tao Qian
   ['Tao Qian',     55, 40, 62, 74, 72, 'taoqian', 'xiapi', 100, 132],
+  ['Zhang Chao',   58, 52, 66, 70, 68, 'zhangchao', 'guangling', 100, 150],
+  ['Zang Hong',    72, 58, 78, 80, 84, 'zhangchao', 'guangling', 96, 160],
   ['Cao Bao',      60, 68, 40, 35, 40, 'taoqian', 'xiapi', 70, 155],
   ['Mi Zhu',       40, 30, 76, 88, 82, 'taoqian', 'xiapi', 75, 165],
   ['Chen Deng',    65, 50, 85, 82, 70, 'taoqian', 'xiapi', 72, 170],
@@ -409,6 +412,7 @@ const OFFICERS = [
 
 // Starting relations between houses (-100 hostile .. 100 close). Unlisted pairs start at 0.
 const INITIAL_RELATIONS = [
+  ['zhangchao', 'caocao', 20], ['zhangchao', 'taoqian', 15], ['zhangchao', 'yuanshu', -25], ['zhangchao', 'dongzhuo', -40],
   ['yuanshao', 'yuanshu', -40],
   ['caocao', 'yuanshao', 25],
   ['liubei', 'gongsunzan', 35],
@@ -708,6 +712,8 @@ const HISTORICAL_DEATHS = [
   ['Dong Zhuo',    192, 4,  "at the palace gates, assassinated in Wang Yun's plot"],
   ['Li Ru',        192, 5,  'on the block after the fall of his master'],
   ['Tao Qian',     194, 12, 'of illness, worn out by the wars in Xu Province'],
+  ['Zhang Chao',   195, 12, 'by his own hand as Cao Cao stormed Yongqiu, his whole family put to the sword'],
+  ['Zang Hong',    196, 6,  'executed by Yuan Shao after holding Dongwuyang to the last grain for his dead lord'],
   ['Lu Kang',      195, 3,  'of illness after two years under siege, never having yielded'],
   ['Fan Chou',     195, 4,  'murdered at a banquet by a jealous rival'],
   ['Cao Bao',      196, 6,  'in a drunken quarrel that ended in bloodshed'],
@@ -815,7 +821,8 @@ const SCENARIOS = [
       caocao:    { ruler: 'Cao Cao', cities: ['chenliu', 'xuchang'], officers: ['Cao Cao', 'Xiahou Dun', 'Xiahou Yuan', 'Cao Ren', 'Cao Hong', 'Xun Yu', 'Yue Jin', 'Li Dian', 'Dian Wei', 'Yu Jin', 'Man Chong', 'Guo Jia', 'Xun You', 'Cheng Yu*'] },
       lubu:      { ruler: 'L\u00fc Bu', name: 'L\u00fc Bu', color: '#b22222', wanderer: true, persona: ['treacherous', 'reckless'], aggr: 1.5, cities: ['puyang'], officers: ['L\u00fc Bu', 'Zhang Liao', 'Chen Gong', 'Hou Cheng*', 'Song Xian*', 'Wei Xu*', 'Diaochan*'] },
       liubei:    { ruler: 'Liu Bei', cities: ['xiaopei'], officers: ['Liu Bei', 'Guan Yu', 'Zhang Fei', 'Jian Yong', 'Sun Qian', 'Zhao Yun'] },
-      taoqian:   { ruler: 'Tao Qian', cities: ['xiapi', 'langya', 'pengcheng', 'guangling'], officers: ['Tao Qian', 'Cao Bao', 'Mi Zhu', 'Chen Deng', 'Zang Ba'] },
+      zhangchao: { ruler: 'Zhang Chao', cities: ['guangling'], officers: ['Zhang Chao', 'Zang Hong'] },
+      taoqian:   { ruler: 'Tao Qian', cities: ['xiapi', 'langya', 'pengcheng'], officers: ['Tao Qian', 'Cao Bao', 'Mi Zhu', 'Chen Deng', 'Zang Ba'] },
       yuanshao:  { ruler: 'Yuan Shao', cities: ['ye', 'nanpi', 'zhongshan', 'pingyuan', 'jinyang', 'shangdang'], officers: ['Yuan Shao', 'Yan Liang', 'Wen Chou', 'Tian Feng', 'Ju Shou', 'Guo Tu', 'Zhang He', 'Gao Lan', 'Yuan Tan'] },
       gongsunzan: { ruler: 'Gongsun Zan', cities: ['beiping'], officers: ['Gongsun Zan', 'Yan Gang', 'Tian Yu'] },
       gongsundu: { ruler: 'Gongsun Du', cities: ['xiangping'], officers: ['Gongsun Du', 'Gongsun Kang'] },
@@ -940,6 +947,8 @@ const BIOS = {
   'Lu Su': 'The generous strategist who brought Sun Quan and Liu Bei together against Cao Cao, and kept the alliance alive while they quarrelled over Jing.',
   'L\u00fc Meng': 'A ruffian who taught himself letters, took Jiangling from under Guan Yu\u2019s nose and died within the year.',
   'Tao Qian': 'The elderly governor of Xu who bequeathed his province to Liu Bei, the only lord ever to give Liu Bei anything freely.',
+  'Zhang Chao': 'Administrator of Guangling and younger brother of Zhang Miao of Chenliu; a founder of the coalition against Dong Zhuo who later sided with L\u00fc Bu against Cao Cao and died at Yongqiu.',
+  'Zang Hong': 'Zhang Chao\u2019s lieutenant and the most stubborn loyalist of the age: he held Dongwuyang for Yuan Shao, then defied him when Yuan Shao let Zhang Chao die, and was executed after a year-long siege.',
   'Kong Rong': 'Descendant of Confucius, scholar and wit, a poor governor and a worse general, executed by Cao Cao for his tongue.',
   'Gongsun Zan': 'Master of the White Horse cavalry on the northern frontier; fought Yuan Shao for a decade and burned himself in his tower at the end.',
   'Ma Teng': 'Half-Qiang lord of the far west, a giant of a man, executed with his household when Cao Cao grew tired of his sons.',

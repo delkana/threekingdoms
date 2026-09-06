@@ -1,7 +1,7 @@
 # Romance of the Three Kingdoms
 
 A browser-based, turn-based strategy game set in 190 AD, the year the coalition
-rose against Dong Zhuo. Pick one of 22 warlords and unite the 58 cities of China (two more houses, the Wuhuan and Xianbei nomads, are AI-only).
+rose against Dong Zhuo. Pick one of 23 warlords and unite the 58 cities of China (two more houses, the Wuhuan and Xianbei nomads, are AI-only).
 
 ## The map
 
@@ -125,13 +125,17 @@ Win by owning every city. Lose when your last city falls.
 
 ## The houses of 190
 
-Besides the sixteen famous warlords and Gongsun Du of Liaodong, five minor
+Besides the sixteen famous warlords and Gongsun Du of Liaodong, six minor
 houses hold cities that would otherwise be unclaimed: Liu Dai, Inspector of Yan
-Province, at Puyang; Zhang Yang, master of Bing Province, at Jinyang; Zhang Yan
-and his Black Mountain bandits at Zhongshan; the old loyalist Lu Kang at
-Lujiang; and Meng Huo, king of the Nanman tribes, at Jianning with Zhu Rong and
-Meng You, a standing threat to Shu. Tao Qian holds Langya and Liu Zhang holds
-Yong'an, as their provinces did in fact. Eight cities start unclaimed.
+Province, at Puyang; Zhang Yang, master of Bing Province, at Jinyang and
+Shangdang; Zhang Yan and his Black Mountain bandits at Zhongshan; the old
+loyalist Lu Kang at Lujiang; Zhang Chao, Administrator of Guangling and a lord
+of the coalition, with his devoted lieutenant Zang Hong; and Meng Huo, king of
+the Nanman tribes, at Jianning with Zhu Rong and Meng You, a standing threat to
+Shu. Tao Qian holds Langya and Pengcheng, Liu Zhang holds Yong'an, Dong Zhuo
+holds Hedong, Ma Teng holds Longxi, Shi Xie holds Hepu and Sun Jian holds
+Lingling as well as Changsha, as their authority did in fact. Twelve cities
+start unclaimed.
 
 Beyond the Great Wall, **Tadun's Wuhuan** hold Liucheng in Liaoxi. They are a
 raider house: they never occupy a city they defeat, but sack it for gold and
@@ -516,7 +520,7 @@ them early. The table lives in `HISTORICAL_DEATHS` in `js/data.js`.
 
 ## Observer mode
 
-Choose **Observe the era** on the title screen to watch all twenty-four houses
+Choose **Observe the era** on the title screen to watch all twenty-five houses
 play against each other. Step with **Next Month** or press **Auto** to run
 continuously at the pace you choose (very slow to fast); the chronicle, city
 panels, Realm, Officers and Diplomacy screens stay available for inspection.
