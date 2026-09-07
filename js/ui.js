@@ -135,7 +135,7 @@ const UI = (() => {
 
   function renderStart() {
     const sc = SCENARIOS.find((x) => x.id === scenarioId);
-    const list = sc.base ? FACTIONS : Object.entries(sc.houses).filter(([id, h]) => !h.dead && (h.cities && h.cities.length || h.guestOf)).map(([id, h]) => { const base = FACTIONS.find((f) => f.id === id); return { id, name: h.name || (base ? base.name : id), color: h.color || (base ? base.color : '#888'), cities: (h.cities || []).map((c) => c.replace('?', '')), blurb: base ? base.blurb : 'A house of this age.', playable: base ? base.playable : true, guestOf: h.guestOf, officers: (h.officers || []).length }; });
+    const list = sc.base ? FACTIONS : Object.entries(sc.houses).filter(([id, h]) => !h.dead && (h.cities && h.cities.length || h.guestOf)).map(([id, h]) => { const base = FACTIONS.find((f) => f.id === id); return { id, name: h.name || (base ? base.name : id), color: h.color || (base ? base.color : '#888'), cities: (h.cities || []).map((c) => c.replace('?', '')), blurb: h.blurb || (base ? base.blurb : 'A house of this age.'), playable: h.playable != null ? h.playable : (base ? base.playable : true), guestOf: h.guestOf, officers: (h.officers || []).length }; });
     const strength = (f) => (sc.base ? factionStrength(f) : f.cities.length * 10 + f.officers * 2);
     const ranked = [...list].sort((a, b) => strength(b) - strength(a));
     const grid = $('#faction-grid');
@@ -143,7 +143,7 @@ const UI = (() => {
       const rank = ranked.indexOf(f);
       const stars = 1 + Math.floor((rank / list.length) * 5);
       const n = sc.base ? OFFICERS.filter((o) => o[6] === f.id).length : f.officers;
-      const cities = f.cities.length ? f.cities.map((c) => (PROVINCES.find((p) => p.id === c) || { name: c }).name).join(', ') : (f.guestOf ? `in exile under ${esc((FACTIONS.find((x) => x.id === f.guestOf) || {}).name || f.guestOf)}` : 'no cities');
+      const cities = f.cities.length ? f.cities.map((c) => (PROVINCES.find((p) => p.id === c) || { name: c }).name).join(', ') : (f.guestOf ? `in exile under ${esc((sc.houses && sc.houses[f.guestOf] && sc.houses[f.guestOf].name) || (FACTIONS.find((x) => x.id === f.guestOf) || {}).name || f.guestOf)}` : 'no cities');
       return `<div class="fcard${f.playable === false ? ' fcard-npc' : ''}" style="--fc:${f.color}" data-fid="${f.id}">
         <span class="fstars" title="${f.playable === false ? 'Not playable' : 'Difficulty'}">${f.playable === false ? 'AI only' : '★'.repeat(stars) + '☆'.repeat(5 - stars)}</span>
         <h3>${esc(f.name)}</h3>

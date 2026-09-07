@@ -285,6 +285,20 @@ world the game has produced.
   officers every generation or so. The Qiang, Di, Shanyue, Yi and Li rise in
   thinly held frontier cities and throw out their governors.
 
+## The men of 189 and 190
+
+The base roster of the coalition year now carries the whole of Dong Zhuo's camp
+(Zhang Ji, Niu Fu, Hu Zhen, Dong Min, Li Su, and Lü Bu's captains Gao Shun,
+Hao Meng, Cao Xing, Hou Cheng, Song Xian and Wei Xu), the court he held (Wang
+Yun, Cai Yong, Yang Biao, Huangfu Song, Zhu Jun, Zhang Wen, Diaochan), the
+coalition lords who were only names in the events (Han Fu, Zhang Miao, Bao Xin,
+Wang Kuang, Qiao Mao, Yuan Yi, Kong Zhou, Liu Yu, Lu Zhi), more of Yuan Shao's
+court, Cao Cao's stewards, Sun Jian's kin and captains, Liu Yan and his court in
+Yi, the Yellow Turban remnants and the bandits of Wu, and the frontier houses'
+lesser men; most of the men with a known end carry a scripted death. Sun Quan,
+Zhuge Liang, Lü Meng, Cheng Yu, Yuan Shang and a few others who once existed
+only through the later scenarios now arrive in every game on their year.
+
 ## New blood
 
 Officers die, so the realm is replenished in two ways. Some 140 historical
@@ -530,6 +544,17 @@ envoys and recruiters and sets how many generals he may name. The Emperor's
 rank is the Han's succession: every lord will resent it.
 
 ## Scenarios and difficulty
+
+The earliest start is **189, Dong Zhuo Enters the Capital** (October 189): Dong
+Zhuo holds Luoyang and the Emperor with the court's loyalists under his eye; Yuan
+Shao sits at Bohai with a handful of men, Cao Cao at Chenliu, Yuan Shu at Wan; Han
+Fu governs Ji with the court that will soon be Yuan Shao's; Liu Yu governs You
+with Gongsun Zan and Liu Bei as guests in his service; Wang Rui holds Jing until
+Sun Jian rides north; Liu Yan rules Yi with Zhang Lu as his man; the Yellow
+Turbans hold Qingzhou and Runan and Yan Baihu holds Wu as houses no one can
+play. Deaths of 190 and after fall on their dates, so the coalition year unfolds
+from its eve.
+
 
 The title screen offers six starts: 190 (the coalition), 194 (Cao Cao and Lü
 Bu), 200 (Guandu), 208 (Red Cliffs), 219 (Hanzhong and Fancheng) and 225 (the

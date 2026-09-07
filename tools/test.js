@@ -145,6 +145,20 @@ test('the late age: officers keep arriving to 305, sons follow the famous, and t
   const alive = Object.values(S.officers).filter((o) => !o.captive).length; const sons = Object.values(S.officers).filter((o) => o.father).length;
   assert(S.year >= 250, 'ran to 260: ' + S.year); assert(alive >= 40, `officers alive in ${S.year}: ${alive}`); assert(sons >= 3, `sons born: ${sons}`);
 });
+test('the men of 189: the base roster is whole, the 189 scenario loads, and the once scenario-only figures arrive in a 190 game', () => {
+  const ids = new Set(G.PROVINCES.map((p) => p.id)); const seen = new Set();
+  for (const r of G.OFFICERS) { assert(ids.has(r[7]), `${r[0]} starts in unknown city ${r[7]}`); assert(!seen.has(r[0]), `duplicate ${r[0]}`); seen.add(r[0]); if (r[6]) assert(G.FACTIONS.some((f) => f.id === r[6]), `${r[0]} serves unknown house ${r[6]}`); }
+  for (const r of G.LATER_OFFICERS) assert(!seen.has(r[0]), `${r[0]} is both base and later`);
+  G.Game.newGame(null, { scenario: '189' }); const S = G.Game.state();
+  assert(S.year === 189 && S.month === 10, 'date'); for (const id of ['hanfu', 'liuyu', 'wangrui', 'yellowturban', 'yanbaihu', 'dongzhuo', 'caocao']) assert(S.factions[id] && S.factions[id].alive, `${id} alive in 189`);
+  assert(S.factions.yellowturban.raider && S.factions.liuzhang.ruler === 'Liu Yan' && S.factions.gongsunzan.guest && S.factions.liubei.guest, '189 particulars');
+  assert(S.officers['Gao Shun'].faction === 'dongzhuo' && S.officers['Zhang He'].faction === 'hanfu' && S.officers['Zhang Lu'].faction === 'liuzhang', '189 rosters');
+  for (let m = 0; m < 12 * 4; m++) { G.Game.endTurn(); if (S.over) break; }
+  assert(!S.officers['Wang Rui'] && !S.officers['Han Fu'], 'the deaths of 190 and 191 fall');
+  G.Game.newGame(null); const S2 = G.Game.state(); assert(S2.officers['Cheng Yu'] && S2.officers['Gao Shun'] && S2.officers['Liu Yan'], 'the new men of 190 are in the base game');
+  for (let m = 0; m < 12 * 19; m++) { G.Game.endTurn(); if (S2.over) break; }
+  for (const n of ['Sun Quan', 'Zhuge Liang', 'L\u00fc Meng', 'Yuan Shang']) assert(S2.officers[n] || (S2.arrived && S2.arrived[n]), `${n} came into a 190 game`);
+});
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();
   S.diplomacy['caocao|yuanshao'] = { rel: 0, status: 'ceasefire', until: 99, cooldown: 0 };

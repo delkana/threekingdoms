@@ -113,7 +113,7 @@ const Game = (() => {
       if (h.dead) continue;
       const base = FACTIONS.find((f) => f.id === fid);
       const F = S.factions[fid] || (S.factions[fid] = { id: fid, name: h.name || fid, ruler: h.ruler, color: h.color || '#888', aggr: h.aggr || 1, alive: true, raider: false, wanderer: !!h.wanderer, prestige: 0, guest: false, host: null, guestSince: 0, hasEmperor: false, favor: 0, household: { troops: 0, gold: 0 }, petitionUntil: 0, persona: h.persona || [], treachery: 0, lastLoss: -99, lastAttackTurn: -99, lastAttackTarget: null, plan: null, caution: 1, title: 0 });
-      F.alive = true; F.title = h.title || 0; F.prestige = (h.title || 0) * 12;
+      F.alive = true; F.title = h.title || 0; F.prestige = (h.title || 0) * 12; if (h.raider) F.raider = true; if (h.persona) F.persona = h.persona; if (h.playable === false) F.playable = false;
       const rulerName = h.ruler.replace('*', '');
       if (h.ruler.endsWith('*')) create(rulerName);
       F.ruler = rulerName; F.name = h.name || (base ? base.name : rulerName);
@@ -1677,12 +1677,12 @@ const Game = (() => {
     city.gold -= DIP_COST[type];
     envoy.acted = true;
     d.cooldown = S.turn + 6;
+    const sw = sweetener ? itemData(sweetener) : null;
+    const swOk = sw && S.items[sweetener] && S.items[sweetener].owner && S.officers[S.items[sweetener].owner] && S.officers[S.items[sweetener].owner].faction === fid;
     if (target === S.player) {
       S.pendingProposals.push({ from: fid, type, envoy: envoy.name, sweetener: swOk ? sweetener : null });
       return { ok: true, msg: `${envoy.name} sets out for ${fname(target)}'s court.`, pending: true };
     }
-    const sw = sweetener ? itemData(sweetener) : null;
-    const swOk = sw && S.items[sweetener].owner && S.officers[S.items[sweetener].owner] && S.officers[S.items[sweetener].owner].faction === fid;
     const chance = acceptChance(fid, target, type, envoy) + (swOk ? Math.min(0.35, itemValue(sw) / 100) : 0);
     if (Math.random() < chance) {
       if (swOk) { const r = rulerOf(target); if (r) giveItem(sweetener, r.name, true); }
