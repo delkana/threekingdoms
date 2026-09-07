@@ -488,6 +488,34 @@ war **recover**: growth is faster the emptier a city is, and settlers return to
 orderly land that stands below two fifths of its ceiling, so the land can raise
 armies again instead of sinking into an exhausted stalemate.
 
+### Campaigns, forecasts and bottlenecks
+
+Each AI house keeps its **campaign**: a hammer city, a target, and the cities
+beside the target that stay staged to answer the siege's call for
+reinforcements. The plan lasts up to a year unless the target changes hands or
+a far better one appears, so a house does not scatter its marches month to
+month; the striking army musters at the hammer while the staging cities hold
+their spare men, and the muster counts them. A house of ten cities or more, or
+one whose realm is split, runs a **second campaign** on a different front,
+fed by one city a month. A **mobile reserve**, the interior city with the most
+friendly neighbours, keeps half its spare men at home.
+
+Threat is a **forecast**, not only a count: every city's garrison is logged
+month by month, and an enemy garrison that has grown by a third within three
+months (and by at least three thousand men) is read as an army being gathered,
+counted in full against the cities next to it and at three fifths one city
+further. Cities that see an army gathering keep their men, get walls first,
+and draw reinforcements before the blow lands.
+
+Spending follows the **bottleneck**. Each month a house asks what caps it: food
+(under five months' supply, or most cities garrisoned beyond what their fields
+can bear), gold (under 500 a city), officers (fewer than 1.2 per city) or men
+(under six tenths of what the land can bear, with gold to spare). The first
+free hand in each city goes to that: fields and villages when food-bound, trade
+and mines, salt pans, markets or docks when gold-bound, searching for talent
+when short of officers, recruiting when short of men. Walls are raised where an
+army is gathering, and to a lower standard on quiet borders.
+
 ### Finishing the war
 
 Alliances are sworn for five years and lapse unless renewed, so a map cannot

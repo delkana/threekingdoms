@@ -213,7 +213,7 @@ const UI = (() => {
       const all = Object.values(S.provinces);
       $('#tb-faction').innerHTML = `👁 Observer`;
       $('#tb-stats').innerHTML = [
-        ['Houses', alive.length], ['Free cities', all.filter((p) => !p.owner).length], ['Troops', fmt(all.reduce((s, p) => s + p.troops, 0))],
+        ['Troops', fmt(all.reduce((s, p) => s + p.troops, 0))],
         ['Officers', Object.values(S.officers).filter((o) => o.faction && !o.captive).length],
         ['Treaties', Object.entries(S.diplomacy).filter(([k, d]) => d.status !== 'neutral' && k.split('|').every((f) => S.factions[f].alive)).length],
       ].map(([k, v]) => `<div class="stat" title="${k}"><b data-k="${k.slice(0, 5)}">${v}</b><span>${k}</span></div>`).join('');

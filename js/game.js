@@ -2226,6 +2226,7 @@ const Game = (() => {
   }
 
   function advanceMonth() {
+    logGarrisons();
     S.month++; S.turn++;
     if (S.month > 12) { S.month = 1; S.year++; }
     const harvest = S.month === 9;
@@ -2397,8 +2398,8 @@ const Game = (() => {
 
   function checkGameOver() {
     if (S.observer) {
-      const alive = Object.values(S.factions).filter((f) => f.alive);
-      if (alive.length <= 1 && !Object.values(S.provinces).some((p) => !p.owner)) { S.over = 'observer'; S.winner = alive[0] ? alive[0].id : null; }
+      const holders = [...new Set(Object.values(S.provinces).map((p) => p.owner).filter(Boolean))];
+      if (holders.length <= 1 && !Object.values(S.provinces).some((p) => !p.owner)) { S.over = 'observer'; S.winner = holders[0] || null; }
       return;
     }
     const mine = factionProvinces(S.player).length;
@@ -2436,6 +2437,22 @@ const Game = (() => {
   const spareTroops = (fid, p) => { const hostileN = neighbors(p.id).filter((n) => n.owner !== fid && n.owner && canAttack(fid, n.owner)); const safe = Math.max(3000, ...hostileN.map((n) => n.troops * 0.6)); return Math.max(0, p.troops - safe); };
   const isFront = (fid, p) => neighbors(p.id).some((n) => n.owner !== fid && (!n.owner || canAttack(fid, n.owner)));
   const threatOn = (fid, p) => Math.max(0, ...neighbors(p.id).filter((n) => n.owner && n.owner !== fid && canAttack(fid, n.owner)).map((n) => n.troops));
+  // a garrison that has grown by a third within three months is an army being gathered: count the growth as a threat to
+  // everything within two hops, in full next door and at three fifths one city further
+  const hopsFrom = (id, k) => { const d = { [id]: 0 }; const q = [id]; while (q.length) { const x = q.shift(); if (d[x] >= k) continue; for (const n of S.adj[x]) if (d[n] === undefined) { d[n] = d[x] + 1; q.push(n); } } return d; };
+  function buildupNear(fid, p) {
+    const log = S.garrisonLog || {}; let sum = 0;
+    for (const [id, dist] of Object.entries(hopsFrom(p.id, 2))) {
+      if (!dist) continue; const n = prov(id); if (!n.owner || n.owner === fid || !canAttack(fid, n.owner)) continue;
+      const h = log[id]; if (!h || h.length < 3) continue;
+      const base = Math.min(...h.slice(0, 3)); if (n.troops >= base * 1.33 && n.troops - base >= 3000) sum += (n.troops - base) * (dist === 1 ? 1 : 0.6);
+    }
+    return sum;
+  }
+  const forecastThreat = (fid, p) => threatOn(fid, p) + buildupNear(fid, p);
+  // the mobile reserve: the interior city with the most friendly neighbours keeps half its spare men at home
+  const reserveCity = (fid) => factionProvinces(fid).filter((p) => !isFront(fid, p)).sort((a, b) => neighbors(b.id).filter((n) => n.owner === fid).length - neighbors(a.id).filter((n) => n.owner === fid).length || b.troops - a.troops)[0] || null;
+  function logGarrisons() { S.garrisonLog = S.garrisonLog || {}; for (const p of Object.values(S.provinces)) { const h = S.garrisonLog[p.id] || (S.garrisonLog[p.id] = []); h.push(p.troops); if (h.length > 4) h.shift(); } }
   const nextHop = (fid, fromId, toId) => {   // BFS through own cities
     if (fromId === toId) return null;
     const prevMap = { [fromId]: null }; const q = [fromId];
@@ -2573,7 +2590,7 @@ const Game = (() => {
   }
 
   // Choose the main war for the month: enemy house (or free city), hammer city, target city.
-  function makePlan(fid) {
+  function makePlan(fid, avoid = null) {
     const F = S.factions[fid]; const th = baseThreshold(fid);
     const destiny = destinyTargets(fid); const leader = leaderHouse();
     const warTarget = F.warTarget && F.warTargetUntil > S.turn && S.factions[F.warTarget] && S.factions[F.warTarget].alive ? F.warTarget : null;
@@ -2592,6 +2609,7 @@ const Game = (() => {
       const potential = p.troops * 0.7 + reinforce;
       for (const t of neighbors(p.id)) {
         if (t.owner === fid || !canAttack(fid, t.owner) || (S.battles && S.battles[t.id])) continue;
+        if (avoid && (t.id === avoid.target || p.id === avoid.hammer || S.adj[avoid.target].includes(t.id) || S.adj[avoid.hammer].includes(p.id))) continue;   // a second front is a different front
         const m = battleModifiers(p.id, t.id); if (m.blocked) continue;
         let ratio = (attStrength(potential * (1 - m.loss), party, p) * m.att) / Math.max(1, defStrength(t) * m.def);
         let score = ratio;
@@ -2624,10 +2642,10 @@ const Game = (() => {
         if (!best || score > best.score) best = { enemy: t.owner, hammer: p.id, target: t.id, score, ratio, since: S.turn };
       }
     }
-    const cur = F.plan;
-    const valid = cur && prov(cur.hammer).owner === fid && prov(cur.target).owner === cur.enemy && prov(cur.target).owner !== fid && S.adj[cur.hammer].includes(cur.target) && canAttack(fid, cur.enemy);
-    if (valid && S.turn - cur.since < 9 && (!best || best.score < cur.score * 1.4)) { return cur; }
-    F.plan = best; return best;
+    const slot = avoid ? 'plan2' : 'plan'; const cur = F[slot];
+    const valid = cur && prov(cur.hammer).owner === fid && prov(cur.target).owner === cur.enemy && prov(cur.target).owner !== fid && S.adj[cur.hammer].includes(cur.target) && canAttack(fid, cur.enemy) && !(avoid && (cur.target === avoid.target || cur.hammer === avoid.hammer));
+    if (valid && S.turn - cur.since < 12 && (!best || best.score < cur.score * 1.4)) { return cur; }
+    F[slot] = best; return best;
   }
 
   function aiPrisoners(fid) {
@@ -2645,6 +2663,18 @@ const Game = (() => {
     }
   }
 
+  // what limits the house this month: food to feed its men, gold to raise and pay them, men below what the land can bear, or officers to govern
+  function bottleneck(fid) {
+    const provs = factionProvinces(fid); if (!provs.length) return null;
+    const troops = provs.reduce((a, p) => a + p.troops, 0), food = provs.reduce((a, p) => a + p.food, 0), gold = provs.reduce((a, p) => a + p.gold, 0);
+    const cap = provs.reduce((a, p) => a + sustainCap(p), 0);
+    const foodMonths = food / Math.max(1, troops * FOOD_UPKEEP);
+    if (foodMonths < 5 || provs.filter((p) => sustainCap(p) < p.troops * 0.8).length > provs.length / 2) return 'food';
+    if (gold / provs.length < 500) return 'gold';
+    if (factionOfficers(fid).length < provs.length * 1.2) return 'officers';
+    if (troops < cap * 0.6 && gold / provs.length > 900) return 'men';
+    return null;
+  }
   function aiTurnInner(fid) {
     const F = S.factions[fid];
     if (!ensureRuler(fid)) return;
@@ -2664,6 +2694,8 @@ const Game = (() => {
     if (!plan) { if (!F.idleSince) F.idleSince = S.turn; } else F.idleSince = 0;   // months with nothing to attack: see aiDiplomacy
     const th = phase === 'unifying' ? 1.1 * (diff() === 'hard' ? 0.95 : diff() === 'easy' ? 1.1 : 1) : baseThreshold(fid) * (F.caution || 1) * (diff() === 'hard' ? 0.95 : diff() === 'easy' ? 1.1 : 1) * Math.min(1.3, 1 + 0.015 * overextension(fid));
     const provs = factionProvinces(fid);
+    const bn = bottleneck(fid); F.bottleneck = bn;
+    const reserve = reserveCity(fid);
     const aiTactics = (H, T, party) => { const bestInt = Math.max(...party.map((o) => o.int)); const ratio = attStrength(H.troops * 0.7, party, H) / Math.max(1, defStrength(T)); const stance = T.defense >= 350 && (partyHas(party, 'siege') || ratio < 1.6) ? 'siege' : ratio >= 1.8 ? 'assault' : bestInt >= 85 ? 'feint' : 'standard'; const m = battleModifiers(H.id, T.id); const lowLoy = T.owner && officersIn(T.id, T.owner).some((o) => !isRuler(o) && o.loyalty < 60); const stratagem = bestInt < 75 ? 'auto' : lowLoy && has(fid, 'schemer') ? 'discord' : m.type === 'river' && (H.fleet || 0) >= 40 ? 'flood' : !isWinter() && bestInt >= 80 ? 'fire' : 'auto'; return { stance, stratagem }; };
 
     // rewards for wavering officers, before they think of leaving
@@ -2676,12 +2708,13 @@ const Game = (() => {
     // 1. defence: evacuate hopeless towns, reinforce threatened ones
     const attacked = new Set();
     const linchpins = new Set(factionProvinces(fid).filter((p) => isLinchpin(fid, p.id)).map((p) => p.id));
-    for (const p of factionProvinces(fid).sort((a, b) => (linchpins.has(b.id) ? 1 : 0) - (linchpins.has(a.id) ? 1 : 0) || threatOn(fid, b) - threatOn(fid, a))) {
-      const threat = threatOn(fid, p); if (!threat) continue;
+    for (const p of factionProvinces(fid).sort((a, b) => (linchpins.has(b.id) ? 1 : 0) - (linchpins.has(a.id) ? 1 : 0) || forecastThreat(fid, b) - forecastThreat(fid, a))) {
+      const threat = forecastThreat(fid, p); if (!threat) continue;
+      const now = threatOn(fid, p);   // only an army already at the gates justifies abandoning a town
       const seat = rulerOf(fid).city;
       const friends = neighbors(p.id).filter((n) => n.owner === fid);
       const bridge = linchpins.has(p.id);   // the link between two halves of the realm is held to the last
-      if (threat > p.troops * (bridge ? 5 : 3) && p.id !== seat && friends.length && p.troops > 800) {
+      if (now > p.troops * (bridge ? 5 : 3) && p.id !== seat && friends.length && p.troops > 800) {
         const dest = friends.reduce((m, n) => (n.troops > m.troops ? n : m));
         const idle = idleOfficers(p.id);
         if (idle.length) transfer(p.id, dest.id, { troops: p.troops - 500, gold: Math.max(0, p.gold - 200), food: Math.max(0, p.food - 2000), officers: idle.map((o) => o.name) });
@@ -2689,40 +2722,49 @@ const Game = (() => {
       }
       if (threat > p.troops * (bridge ? 0.9 : 1.2)) {
         for (const d of friends) {
-          if (threatOn(fid, d) > d.troops) continue;
+          if (forecastThreat(fid, d) > d.troops) continue;
           const spare = spareTroops(fid, d); const idle = idleOfficers(d.id).filter((o) => !isRuler(o));
           if (spare >= 2000 && idle.length && officersIn(d.id, fid).length >= 2) transfer(d.id, p.id, { troops: Math.floor(spare * 0.7), officers: [idle.reduce((m, o) => (o.war > m.war ? o : m)).name] });
         }
       }
     }
 
-    // 2. the main war: stage toward the hammer, move commanders, strike when ready
-    if (plan && prov(plan.hammer).owner === fid) {
-      const H = prov(plan.hammer), T = prov(plan.target);
+    // 2. the campaigns: stage toward the hammer, hold the cities beside the target ready to march, strike when ready.
+    //    A great or divided realm runs a second campaign on another front.
+    const runCampaign = (pl, main) => {
+      if (!pl || prov(pl.hammer).owner !== fid) return;
+      const H = prov(pl.hammer), T = prov(pl.target);
       const m = battleModifiers(H.id, T.id);
       const need = (defStrength(T) * m.def * th) / (m.att * (1 - m.loss));
       const party = aiParty(H.id);
       const keepHome = phase === 'unifying' ? 0.15 : neighbors(H.id).filter((n) => n.owner && hostile(n)).length > 1 ? 0.35 : 0.2;
       const send = Math.floor(H.troops * (1 - keepHome));
       const smallPrey = !T.owner || factionProvinces(T.owner).length <= 2 || T.owner === lastFoe(fid);
-      const ready = party.length && send >= 3000 && attStrength(send, party, H) > need && H.food > send * 0.15 && !(phase === 'consolidating' && !smallPrey);
-      if (ready) { attack(H.id, T.id, party.map((o) => o.name), send, aiTactics(H, T, party)); attacked.add(H.id); }
-      else {
-        // gather: neighbours send spare troops and a strong commander; interior cities route troops one hop closer
-        for (const d of factionProvinces(fid)) {
-          if (d.id === H.id) continue;
-          const idle = idleOfficers(d.id).filter((o) => !isRuler(o));
-          if (!idle.length || officersIn(d.id, fid).length < (phase !== 'rising' && !isFront(fid, d) && d.order >= 60 ? 1 : 2)) continue;
-          const hop = S.adj[d.id].includes(H.id) ? H.id : nextHop(fid, d.id, H.id);
-          if (!hop) continue;
-          const spare = isFront(fid, d) ? spareTroops(fid, d) : Math.max(0, d.troops - (phase === 'unifying' ? 1200 : 2500));
-          if (spare < 2000) continue;
-          const escort = idle.reduce((mm, o) => (o.war > mm.war ? o : mm));
-          const keepGov = governorOf(d); if (keepGov && keepGov.name === escort.name && idle.length < 2) continue;
-          transfer(d.id, hop, { troops: Math.floor(spare * 0.8), gold: Math.floor(Math.max(0, d.gold - 1000) * 0.3), food: Math.floor(Math.max(0, d.food - d.troops * FOOD_UPKEEP * 6) * 0.5), officers: [escort.name] });
-        }
+      const staging = S.adj[T.id].filter((c) => c !== H.id && prov(c).owner === fid);   // they answer the call for reinforcements when the siege opens
+      const stagedHelp = staging.reduce((s, c) => s + spareTroops(fid, prov(c)) * 0.5, 0);
+      const ready = party.length && send >= 3000 && attStrength(send + stagedHelp * 0.5, party, H) > need && H.food > send * 0.15 && !(phase === 'consolidating' && !smallPrey && S.turn - pl.since < 6);
+      if (ready) { attack(H.id, T.id, party.map((o) => o.name), send, aiTactics(H, T, party)); attacked.add(H.id); return; }
+      // gather: neighbours send spare troops and a strong commander; interior cities route troops one hop closer; staging cities keep theirs
+      for (const d of factionProvinces(fid)) {
+        if (d.id === H.id || staging.includes(d.id) || attacked.has(d.id)) continue;
+        const idle = idleOfficers(d.id).filter((o) => !isRuler(o));
+        if (!idle.length || officersIn(d.id, fid).length < (phase !== 'rising' && !isFront(fid, d) && d.order >= 60 ? 1 : 2)) continue;
+        const hop = S.adj[d.id].includes(H.id) ? H.id : nextHop(fid, d.id, H.id);
+        if (!hop) continue;
+        let spare = isFront(fid, d) ? spareTroops(fid, d) : Math.max(0, d.troops - (phase === 'unifying' ? 1200 : 2500));
+        if (reserve && d.id === reserve.id) spare = Math.floor(spare * 0.5);   // the reserve keeps half back
+        if (buildupNear(fid, d) > d.troops * 0.8) continue;                   // a city that sees an army gathering against it keeps its men
+        if (spare < 2000) continue;
+        const escort = idle.reduce((mm, o) => (o.war > mm.war ? o : mm));
+        const keepGov = governorOf(d); if (keepGov && keepGov.name === escort.name && idle.length < 2) continue;
+        transfer(d.id, hop, { troops: Math.floor(spare * 0.8), gold: Math.floor(Math.max(0, d.gold - 1000) * 0.3), food: Math.floor(Math.max(0, d.food - d.troops * FOOD_UPKEEP * 6) * 0.5), officers: [escort.name] });
+        if (!main) break;   // the second campaign draws on one city a month
       }
-    }
+    };
+    runCampaign(plan, true);
+    const wantSecond = plan && (comps.count > 1 || provs.length >= 10) && phase !== 'consolidating';
+    const plan2 = wantSecond ? makePlan(fid, plan) : null;
+    if (plan2) runCampaign(plan2, false);
     // 3. opportunistic strikes elsewhere when very favourable
     for (const p of factionProvinces(fid)) {
       if (attacked.has(p.id)) continue;
@@ -2757,24 +2799,33 @@ const Game = (() => {
     // 5. domestic work: phased build order, personality, and spending the hoard
     const year = S.year;
     for (const p of factionProvinces(fid)) {
-      const front = isFront(fid, p); const threat = threatOn(fid, p);
+      const front = isFront(fid, p); const threat = threatOn(fid, p); const menace = forecastThreat(fid, p);
       const tier = provData(p.id).tier; const tierCap = 8000 + tier * 4000;
       const passCity = S.adj[p.id].some((n) => roadType(p.id, n) === 'pass' && prov(n).owner !== fid);
       for (const o of idleOfficers(p.id)) {
         const foodMonths = p.food / Math.max(1, p.troops * FOOD_UPKEEP);
         const cap = Math.max(tierCap, sustainCap(p)) * (has(fid, 'reckless') ? 1.1 : 1);
-        const wantTroops = p.troops < cap && (p.troops < threat * 1.1 || p.troops < tierCap || (front && p.gold > 2000) || p.gold > 4000);
+        const wantTroops = p.troops < cap && (p.troops < menace * 1.1 || p.troops < tierCap || (front && p.gold > 2000) || p.gold > 4000);
         const needFleet = hasShipyard(p) && p.fleet < (p.gold > 4000 ? 80 : 60) && neighbors(p.id).some((n) => hostile(n) && ['river', 'sea'].includes(roadType(p.id, n.id)));
         const rich = p.gold > 4000;
         const builder = has(fid, 'builder');
         if (p.order < (phase === 'rising' ? 55 : 70) && p.gold >= COST.pacify) pacify(p.id, o.name);
+        // the bottleneck first: whatever caps the house this month gets the officer's hand
+        else if (bn === 'food' && p.gold >= COST.develop && p.agri < 999 && foodMonths < 12) develop(p.id, o.name, 'agri');
+        else if (bn === 'food' && p.gold >= SITE_TYPES.village.cost + 300 && availableSites(p.id).some((x) => x.type === 'village' && x.ok)) buildSite(p.id, o.name, 'village');
+        else if (bn === 'gold' && p.gold >= COST.develop && p.comm < 900) develop(p.id, o.name, 'comm');
+        else if (bn === 'gold' && p.gold >= 800 && availableSites(p.id).some((x) => ['mine', 'salt', 'market', 'docks'].includes(x.type) && x.ok && x.cost <= p.gold - 200)) buildSite(p.id, o.name, availableSites(p.id).find((x) => ['mine', 'salt', 'market', 'docks'].includes(x.type) && x.ok && x.cost <= p.gold - 200).type);
+        else if (bn === 'officers' && !freeOfficersIn(p.id).length) search(p.id, o.name);
+        else if (bn === 'men' && p.gold >= COST.recruit && p.troops < sustainCap(p) && p.pop > 60000 && foodMonths > 6) recruitTroops(p.id, o.name);
+        // walls where an army is gathering against the city
+        else if (menace > p.troops * 0.8 && p.gold >= COST.fortify && p.defense < 800) fortify(p.id, o.name);
         else if (p.gold >= COST.resettle && p.order >= 40 && p.pop < popCapOf(p) * (p.gold > 6000 ? 0.6 : 0.4)) resettle(p.id, o.name);
         else if (p.gold >= COST.develop && (foodMonths < 8 || p.agri < 200) && p.agri < 999) develop(p.id, o.name, 'agri');
         else if (rich && foodMonths < 12) buyFood(p.id, 2000), search(p.id, o.name);
         else if (needFleet && p.gold >= COST.ships) buildShips(p.id, o.name);
         else if (p.gold >= COST.recruit && wantTroops && p.pop > 60000 && foodMonths > 6) recruitTroops(p.id, o.name);
         else if (year <= 194 && p.gold >= COST.develop && p.comm < 500) develop(p.id, o.name, 'comm');
-        else if (p.gold >= COST.fortify && front && p.defense < (phase !== 'rising' ? 700 : passCity ? 600 : builder ? 550 : 450)) fortify(p.id, o.name);
+        else if (p.gold >= COST.fortify && front && p.defense < (menace > p.troops * 0.5 ? (phase !== 'rising' ? 700 : passCity ? 600 : builder ? 550 : 450) : 350)) fortify(p.id, o.name);
         else if (p.gold >= COST.develop && p.comm < (builder ? 900 : 750)) develop(p.id, o.name, 'comm');
         else if (p.gold >= COST.develop && p.agri < 999 && (p.troops > p.agri * 40 || builder)) develop(p.id, o.name, 'agri');
         else if (p.gold >= 900 && sitesOf(p).some((x) => x.damaged)) repairSite(p.id, o.name, sitesOf(p).findIndex((x) => x.damaged));
@@ -2801,7 +2852,7 @@ const Game = (() => {
     if (!parsed.provinces || Object.keys(parsed.provinces).length !== PROVINCES.length || PROVINCES.some((p) => !parsed.provinces[p.id])) return false;
     S = parsed;
     // older saves: backfill fields added later
-    S.diplomacy = S.diplomacy || {}; S.pendingProposals = S.pendingProposals || []; S.pendingSuccession = S.pendingSuccession || null; S.favors = S.favors || {}; S.pendingAid = S.pendingAid || []; S.battles = S.battles || {};
+    S.diplomacy = S.diplomacy || {}; S.pendingProposals = S.pendingProposals || []; S.pendingSuccession = S.pendingSuccession || null; S.favors = S.favors || {}; S.pendingAid = S.pendingAid || []; S.battles = S.battles || {}; S.garrisonLog = S.garrisonLog || {};
     S.options = S.options || { historicalDeaths: true };
     S.adj = buildAdj();
     for (const f of Object.values(S.factions)) { const d = FACTIONS.find((x) => x.id === f.id); if (f.raider == null) f.raider = !!(d && d.raider); if (f.wanderer == null) f.wanderer = !!(d && d.wanderer); if (f.prestige == null) f.prestige = 0; if (f.guest == null) { f.guest = false; f.host = null; f.guestSince = 0; } if (f.hasEmperor == null) f.hasEmperor = false; if (f.favor == null) f.favor = f.guest ? 50 : 0; if (!f.household) f.household = { troops: 0, gold: 0 }; if (f.petitionUntil == null) f.petitionUntil = 0; const dd = FACTIONS.find((x) => x.id === f.id); if (!f.persona) f.persona = (dd && dd.persona) || []; if (f.treachery == null) f.treachery = 0; if (f.lastLoss == null) f.lastLoss = -99; if (f.lastAttackTurn == null) f.lastAttackTurn = -99; if (f.caution == null) f.caution = 1; if (!f.phase) f.phase = 'rising'; if (!f.attackedBy) f.attackedBy = {}; if (!f.gains) f.gains = []; }
