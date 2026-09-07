@@ -814,7 +814,7 @@ const EVENTS = [
   // ---------------------------------------------------------- the regent's coup
   {
     id: 'regent-coup', title: 'The regent', repeat: true,
-    from: [215, 1], to: [280, 12],
+    from: [215, 1], to: [330, 12],
     when: (E, S) => {
       for (const H of bigHouses(E, S, 6)) {
         if (((flags(S).coupChecked || {})[H.id] || 0) > S.turn) continue;
@@ -931,7 +931,7 @@ const EVENTS = [
   },
   {
     id: 'tribes-rise', title: 'The tribes rise', repeat: true,
-    from: [190, 1], to: [280, 12],
+    from: [190, 1], to: [330, 12],
     when: (E, S) => {
       const cands = ['longxi', 'xiliang', 'wudu', 'danyang', 'jianan', 'zangke', 'hepu'].map((c) => S.provinces[c]).filter((p) => p.owner && S.factions[p.owner].alive && !S.factions[p.owner].raider && p.troops < 4000 && p.order < 55);
       if (!cands.length || Math.random() > 0.04) return null;
@@ -943,6 +943,116 @@ const EVENTS = [
       const seat = seatOf(E, ctx.fid); for (const o of E.officersIn(ctx.city, ctx.fid)) o.city = seat;
       E.transferCity(ctx.city, null); const p = S.provinces[ctx.city]; p.troops = 9000; p.order = 40;
       return `With the garrison of ${E.pname(ctx.city)} thin and its people restless, ${tribe} rise and drive out the officials of ${E.fname(ctx.fid)}. The city answers to no lord.`;
+    },
+  },
+  // ---------------------------------------------------------- the age after the heroes
+  {
+    id: 'jin-usurpation', title: 'The mandate passes', repeat: true,
+    from: [255, 1], to: [330, 12],
+    when: (E, S) => {
+      for (const H of bigHouses(E, S, 8)) {
+        if ((flags(S).usurped || {})[H.id]) continue;
+        const R = E.rulerOf(H.id); if (!R) continue;
+        const weak = E.age(R) <= 18 || R.ldr + R.war + R.int + R.pol + R.chr < 280 || E.age(R) >= 65;
+        const M = E.factionOfficers(H.id).filter((o) => o.name !== R.name && o.name.split(' ')[0] !== R.name.split(' ')[0] && o.int >= 80 && o.pol >= 78 && o.ldr >= 60 && E.age(o) >= 36 && E.age(o) <= 70).sort((a, b) => b.int + b.pol + b.ldr - a.int - a.pol - a.ldr)[0];
+        if (!M || !(weak || M.name.split(' ')[0] === 'Sima') || Math.random() > 0.08) continue;
+        return { fid: H.id, m: M.name, r: R.name };
+      }
+      return null;
+    },
+    decision: {
+      prompt: (E, S, ctx) => `${ctx.m} holds every office that matters, and the omens are read aloud in the streets: the mandate has passed. His men ask ${ctx.r} to yield the seat "for the peace of the realm", as the Han once yielded. Refuse, and the swords are already drawn.`,
+      options: [
+        { label: 'Yield the seat', ai: (E, S, ctx) => (ctx.m.split(' ')[0] === 'Sima' ? 0.7 : 0.45), apply: (E, S, ctx) => {
+          const F = S.factions[ctx.fid]; const M = S.officers[ctx.m]; const old = S.officers[ctx.r]; (flags(S).usurped = flags(S).usurped || {})[ctx.fid] = true;
+          const fam = ctx.m.split(' ')[0]; const dyn = fam === 'Sima' ? 'Jin' : `the house of ${fam}`;
+          F.ruler = ctx.m; F.name = dyn; F.dynasty = dyn; M.loyalty = 100; M.city = seatOf(E, ctx.fid); F.prestige = Math.max(0, (F.prestige || 0) - 10);
+          if (old) { old.loyalty = 40; }
+          // the loyal few will not serve the new master: they go to the old lord's side, or into the wilderness
+          const loyal = E.factionOfficers(ctx.fid).filter((o) => o.name !== ctx.m && o.name !== ctx.r && o.loyalty >= 92 && Math.random() < 0.35);
+          const border = E.factionProvinces(ctx.fid).filter((p) => p.id !== seatOf(E, ctx.fid) && E.officersIn(p.id, ctx.fid).some((o) => o.name === ctx.r || loyal.includes(o)))[0] || E.factionProvinces(ctx.fid).filter((p) => p.id !== seatOf(E, ctx.fid)).sort((a, b) => a.troops - b.troops)[0];
+          let tail = '';
+          if (old && border && loyal.length >= 2 && Math.random() < 0.5 && E.foundHouse({ id: `loyal-${slug(ctx.r)}-${S.turn}`, name: `${ctx.r}'s loyalists`, ruler: ctx.r, color: REBEL_COLORS[(S.turn + 3) % REBEL_COLORS.length], cities: [border.id], aggr: 0.9, persona: ['honourable'] })) {
+            for (const o of loyal) { o.faction = `loyal-${slug(ctx.r)}-${S.turn}`; o.city = border.id; o.loyalty = 95; } old.city = border.id; old.loyalty = 100;
+            tail = ` ${ctx.r} is escorted to ${E.pname(border.id)} as a duke of the new order, and ${loyal.map((o) => o.name).join(', ')} go with him; within the month the city has raised his banner again.`;
+          } else { for (const o of loyal) { o.faction = null; o.loyalty = 0; } if (loyal.length) tail = ` ${loyal.map((o) => o.name).join(', ')} will not serve the new master and retire to their estates.`; }
+          return `${ctx.r} yields the seat. ${ctx.m} ascends it, and the house is proclaimed ${dyn}.${tail}`;
+        } },
+        { label: 'Have him executed', ai: (E, S, ctx) => (ctx.m.split(' ')[0] === 'Sima' ? 0.3 : 0.55), apply: (E, S, ctx) => {
+          const M = S.officers[ctx.m]; (flags(S).usurped = flags(S).usurped || {})[ctx.fid] = true;
+          const clients = E.factionOfficers(ctx.fid).filter((o) => o.name !== ctx.m && o.name !== ctx.r && o.loyalty <= 70).sort((a, b) => b.ldr + b.war - a.ldr - a.war).slice(0, 3);
+          const away = M.city !== seatOf(E, ctx.fid);
+          if (away && Math.random() < 0.5 && E.foundHouse({ id: `rebel-${slug(ctx.m)}-${S.turn}`, name: ctx.m, ruler: ctx.m, color: REBEL_COLORS[S.turn % REBEL_COLORS.length], cities: [M.city], aggr: 1.3, persona: ['schemer'] })) {
+            for (const o of clients) { o.faction = `rebel-${slug(ctx.m)}-${S.turn}`; o.city = M.city; o.loyalty = 80; }
+            return `The headsman rides for ${E.pname(M.city)}, but ${ctx.m} was warned. He raises his banner there with ${clients.map((o) => o.name).join(', ') || 'his clients'} and the realm has two masters.`;
+          }
+          E.killQuiet(ctx.m, `beheaded by ${ctx.r}'s order for plotting to take the seat`);
+          for (const o of clients) if (Math.random() < 0.5) { o.faction = null; o.loyalty = 0; }
+          return `${ctx.m} is taken at the gate of the palace and beheaded with his family. His clients scatter, and the court is a quieter, poorer place.`;
+        } },
+      ],
+    },
+  },
+  {
+    id: 'war-of-princes', title: 'The war of the princes', repeat: true,
+    from: [285, 1], to: [330, 12],
+    when: (E, S) => {
+      for (const H of bigHouses(E, S, 8)) {
+        if (((flags(S).princesChecked || {})[H.id] || 0) > S.turn) continue;
+        const R = E.rulerOf(H.id); if (!R) continue;
+        const weak = E.age(R) <= 18 || R.ldr + R.war + R.int + R.pol + R.chr < 290 || E.age(R) >= 65;
+        if (!weak) continue;
+        const fam = R.name.split(' ')[0]; const seat = seatOf(E, H.id);
+        const seen = new Set([seat]);
+        const princes = E.factionOfficers(H.id).filter((o) => o.name !== R.name && o.name.split(' ')[0] === fam && o.ldr >= 60 && E.age(o) >= 20).sort((a, b) => b.ldr + b.war - a.ldr - a.war).filter((o) => { if (seen.has(o.city) || S.provinces[o.city].owner !== H.id) return false; seen.add(o.city); return true; }).slice(0, 3);
+        if (princes.length < 2 || Math.random() > 0.08) continue;
+        return { fid: H.id, r: R.name, princes: princes.map((o) => o.name) };
+      }
+      return null;
+    },
+    decision: {
+      prompt: (E, S, ctx) => `The princes of the blood, ${ctx.princes.join(' and ')}, each hold a great city with an army of their own, and each believes the seat that ${ctx.r} keeps so poorly should be his. Their envoys are already at one another's gates.`,
+      options: [
+        { label: 'Strip them of their commands', ai: 0.5, apply: (E, S, ctx) => {
+          (flags(S).princesChecked = flags(S).princesChecked || {})[ctx.fid] = S.turn + 48;
+          const rose = [];
+          ctx.princes.forEach((n, i) => { const o = S.officers[n]; if (!o) return; if (Math.random() < 0.5 && E.foundHouse({ id: `prince-${slug(n)}-${S.turn}`, name: n, ruler: n, color: REBEL_COLORS[(S.turn + i) % REBEL_COLORS.length], cities: [o.city], aggr: 1.4, persona: ['reckless'] })) rose.push(n); else { o.loyalty = Math.max(0, o.loyalty - 20); o.city = seatOf(E, ctx.fid); } });
+          for (let i = 0; i < rose.length; i++) for (let j = i + 1; j < rose.length; j++) E.setRelation(`prince-${slug(rose[i])}-${S.turn}`, `prince-${slug(rose[j])}-${S.turn}`, -60);
+          return rose.length ? `The princes are summoned to court and stripped of their seals. ${rose.join(' and ')} refuse to come: they raise their banners in their own cities, and the war of the princes begins.` : `The princes are summoned to court, stripped of their seals and kept under the eye of the palace guard. They mutter, and the realm holds.`;
+        } },
+        { label: 'Let them be', ai: 0.5, apply: (E, S, ctx) => {
+          (flags(S).princesChecked = flags(S).princesChecked || {})[ctx.fid] = S.turn + 48;
+          const rose = [];
+          ctx.princes.forEach((n, i) => { const o = S.officers[n]; if (!o) return; const extra = S.adj[o.city].filter((c) => S.provinces[c].owner === ctx.fid && c !== seatOf(E, ctx.fid) && !ctx.princes.some((p) => S.officers[p] && S.officers[p].city === c)).slice(0, 1); if (E.foundHouse({ id: `prince-${slug(n)}-${S.turn}`, name: n, ruler: n, color: REBEL_COLORS[(S.turn + i) % REBEL_COLORS.length], cities: [o.city].concat(extra), aggr: 1.4, persona: ['reckless'] })) rose.push(n); });
+          for (let i = 0; i < rose.length; i++) for (let j = i + 1; j < rose.length; j++) E.setRelation(`prince-${slug(rose[i])}-${S.turn}`, `prince-${slug(rose[j])}-${S.turn}`, -60);
+          return rose.length ? `Left to themselves, the princes fall on one another. ${rose.join(' and ')} proclaim themselves regents of the realm from their own cities, and every road between them fills with soldiers.` : `The princes glare at one another across the court, and for now the realm holds.`;
+        } },
+      ],
+    },
+  },
+  {
+    id: 'yongjia-storm', title: 'The storm from the north',
+    from: [300, 1], to: [330, 12],
+    when: (E, S) => {
+      if (flags(S).yongjia) return null;
+      const leader = ['Liu Yuan', 'Shi Le', 'Liu Cong', 'Wang Mi'].map((n) => S.officers[n]).find((o) => o && !o.captive);
+      if (!leader || Math.random() > 0.06) return null;
+      const cands = ['jinyang', 'ye', 'beiping', 'xiangping', 'pingyuan', 'changan', 'longxi', 'xiliang'].map((c) => S.provinces[c]).filter((p) => p.owner && S.factions[p.owner].alive && !S.factions[p.owner].raider && p.owner !== leader.faction);
+      if (cands.length < 2) return null;
+      cands.sort((a, b) => a.troops - b.troops);
+      return { leader: leader.name, cities: cands.slice(0, 2 + (cands.length > 3 && Math.random() < 0.5 ? 1 : 0)).map((p) => p.id) };
+    },
+    apply: (E, S, ctx) => {
+      flags(S).yongjia = true;
+      const L = S.officers[ctx.leader]; const fam = ctx.leader.split(' ')[0];
+      const id = `zhao-${S.turn}`; const name = fam === 'Liu' ? 'Han-Zhao' : fam === 'Shi' ? 'Later Zhao' : `${ctx.leader}'s horde`;
+      if (L.faction) { L.faction = null; }
+      if (!E.foundHouse({ id, name, ruler: ctx.leader, color: '#8b1a1a', cities: ctx.cities, aggr: 1.6, persona: ['reckless', 'treacherous'] })) return null;
+      L.faction = id; L.city = ctx.cities[0]; L.loyalty = 100;
+      for (const c of ctx.cities) { const p = S.provinces[c]; p.troops = Math.max(p.troops, 22000); p.training = Math.max(p.training, 65); p.order = 45; p.fleet = 0; }
+      for (const n of ['Liu Yuan', 'Shi Le', 'Liu Cong', 'Wang Mi']) { const o = S.officers[n]; if (o && n !== ctx.leader && !o.captive && (!o.faction || o.loyalty < 70)) { o.faction = id; o.city = ctx.cities[0]; o.loyalty = 90; } }
+      const who = fam === 'Liu' ? 'the Xiongnu of the Five Divisions' : fam === 'Shi' ? 'the Jie horsemen' : 'the northern hordes';
+      return `The storm breaks. ${ctx.leader} leads ${who} down from the frontier and ${E.pname(ctx.cities[0])}${ctx.cities.length > 1 ? `, ${ctx.cities.slice(1).map(E.pname).join(' and ')}` : ''} fall in a single season. He proclaims himself lord of ${name}, and the north belongs to the horse.`;
     },
   },
   // ---------------------------------------------------------- Jing: the house of Liu Biao

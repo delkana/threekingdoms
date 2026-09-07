@@ -799,7 +799,7 @@ const Game = (() => {
 
   function captureCity(R, attOfficers, defOfficers, remaining) {
     const to = prov(R.to), from = prov(R.from);
-    const attF = R.attacker, defF = R.defender;
+    const attF = R.attacker, defF = R.defender && S.factions[R.defender] ? R.defender : null;
     const L = (text, cls = '') => R.lines.push({ text, cls });
     L(`The gates of ${pname(R.to)} fall! ${fname(attF)} takes the city.`, 'good');
 
@@ -1316,6 +1316,7 @@ const Game = (() => {
     return null;
   }
   function processArrivals() {
+    sonsOfHeroes();
     // 1. historical figures come of age or come forward on their year (spread across the months)
     for (const r of LATER_OFFICERS) {
       const [name, ldr, war, int_, pol, chr, born, year, city, pref] = r;
@@ -1336,8 +1337,9 @@ const Game = (() => {
     const short = Object.values(S.factions).filter((f) => f.alive && !f.raider && !f.guest && factionProvinces(f.id).length >= 2 && factionOfficers(f.id).length < factionProvinces(f.id).length * 1.2);
     const pull = short.length && living < 170 ? 0.15 : 0;
     S.generatedTalents = S.generatedTalents || 0;
-    const wellDry = S.generatedTalents >= TALENT_CAP || S.year > 245;   // the age of heroes ends: no endless supply of nameless worthies
-    if (!wellDry && (Math.random() < pull || (living < target && Math.random() < Math.min(0.9, 0.25 + (target - living) / 40)))) {
+    const lateAge = S.year > 245;   // after the age of heroes the well runs slow, and the men it yields are lesser
+    const wellDry = (!lateAge && S.generatedTalents >= TALENT_CAP) || S.year > 400;
+    if (!wellDry && (!lateAge || Math.random() < 0.5) && (Math.random() < pull || (living < target && Math.random() < Math.min(0.9, 0.25 + (target - living) / 40)))) {
       const owned = Object.values(S.provinces).filter((p) => p.owner && !S.factions[p.owner].raider);
       // weight cities by their house's shortage of officers per city
       const weighted = owned.map((p) => { const f = S.factions[p.owner]; const ratio = factionOfficers(f.id).length / Math.max(1, factionProvinces(f.id).length); return { p, w: Math.max(0.2, 2.2 - ratio) }; });
@@ -1346,7 +1348,7 @@ const Game = (() => {
       const name = talentName();
       if (name) {
         S.generatedTalents++;
-        const late = S.generatedTalents > TALENT_CAP * 0.6 ? 6 : 0;   // the later worthies are lesser men
+        const late = lateAge ? 8 : S.generatedTalents > TALENT_CAP * 0.6 ? 6 : 0;   // the later worthies are lesser men
         const q = (base) => clamp(Math.round(base - late + (Math.random() + Math.random() - 1) * 22), 20, 92);
         const kind = Math.random();
         const o = kind < 0.45 ? { ldr: q(66), war: q(70), int: q(45), pol: q(42), chr: q(52) } : kind < 0.8 ? { ldr: q(50), war: q(38), int: q(70), pol: q(72), chr: q(58) } : { ldr: q(62), war: q(58), int: q(62), pol: q(60), chr: q(64) };
@@ -1354,6 +1356,34 @@ const Game = (() => {
         const text = `${name}, ${kind < 0.45 ? 'a fighter of local renown' : kind < 0.8 ? 'a scholar of some learning' : 'a capable man of good family'}, comes forward at ${pname(p.id)}.`;
         p.owner === S.player ? notice(text, 'good') : log(text, 'good');
       }
+    }
+  }
+
+  // ---------- sons of the famous ----------
+  // a notable officer past forty-five, or one who has just died, may be followed by a son of his line: his surname, most of his gifts, his house
+  const notable = (o) => o.ldr + o.war + o.int + o.pol + o.chr >= 320 || isRuler(o);
+  const worthy = (o) => o.ldr + o.war + o.int + o.pol + o.chr >= 260;   // a lesser man may still leave one son
+  const sonsAllowed = (o) => (notable(o) ? 2 : worthy(o) ? 1 : 0);
+  function spawnSon(father, why) {
+    if ((father.sons || 0) >= sonsAllowed(father)) return null;
+    const fam = familyName(father.name); let name = null;
+    for (let i = 0; i < 40 && !name; i++) { const n = `${fam} ${pick(GIVEN)}`; if (!S.officers[n] && !OFFICERS.some((r) => r[0] === n) && !LATER_OFFICERS.some((r) => r[0] === n) && !(S.arrived && S.arrived[n])) name = n; }
+    if (!name) return null;
+    const q = (v) => clamp(Math.round(v * rnd(0.65, 0.88) + ri(-4, 4)), 20, 96);
+    const born = Math.min(S.year - 16, (father.born == null ? S.year - 50 : father.born) + ri(24, 34));
+    const house = father.faction && S.factions[father.faction] && S.factions[father.faction].alive && !S.factions[father.faction].guest && factionProvinces(father.faction).length ? father.faction : null;
+    const city = house && prov(father.city) && prov(father.city).owner === house ? father.city : house ? factionProvinces(house)[0].id : (prov(father.city) ? father.city : pick(Object.keys(S.provinces)));
+    S.officers[name] = { name, ldr: q(father.ldr), war: q(father.war), int: q(father.int), pol: q(father.pol), chr: q(father.chr), faction: house, city, loyalty: house ? 85 : 0, born, acted: false, captive: null, skills: father.skills && father.skills.length && Math.random() < 0.5 ? [pick(father.skills)] : [], rank: 0, father: father.name };
+    S.arrived = S.arrived || {}; S.arrived[name] = S.turn; father.sons = (father.sons || 0) + 1;
+    const text = `${name}, son of ${father.name}, ${why === 'death' ? 'takes up his father\'s sword' : 'comes of age'}${house ? ` in the service of ${fname(house)}` : ''} at ${pname(city)}.`;
+    (house === S.player || prov(city).owner === S.player) ? notice(text, 'good') : log(text, 'good');
+    return S.officers[name];
+  }
+  function sonsOfHeroes() {
+    for (const o of allOfficers()) {
+      if (o.captive || (o.sons || 0) >= sonsAllowed(o)) continue;
+      const a = age(o); if (a < 45 || a > 72) continue;
+      if (Math.random() < (notable(o) ? 1 / 60 : 1 / 120)) spawnSon(o, 'age');
     }
   }
 
@@ -1372,6 +1402,7 @@ const Game = (() => {
 
   function killOfficer(o, cause, scripted = false) {
     if (!S.officers[o.name]) return;
+    if (age(o) >= 40 && (o.sons || 0) < sonsAllowed(o) && Math.random() < (notable(o) ? 0.6 : 0.4)) spawnSon(o, 'death');
     const fid = o.faction, wasRuler = isRuler(o), captor = o.captive;
     const text = `${o.name} has died ${cause} at the age of ${age(o)}.`;
     S.stats.deaths++;
@@ -1888,6 +1919,12 @@ const Game = (() => {
     for (const pr of S.pendingProposals || []) pr.from = rekey(pr.from, fid, origId);
     if (S.favors) S.favors = Object.fromEntries(Object.entries(S.favors).map(([k, v]) => [k.split('>').map((x) => rekey(x, fid, origId)).join('>'), v]));
     for (const a of S.pendingAid || []) a.from = rekey(a.from, fid, origId);
+    // live battles follow the house too
+    for (const B of Object.values(S.battles || {})) {
+      B.attF = rekey(B.attF, fid, origId); B.defF = rekey(B.defF, fid, origId); B.att.fid = rekey(B.att.fid, fid, origId); B.def.fid = rekey(B.def.fid, fid, origId);
+      for (const u of B.units) u.fid = rekey(u.fid, fid, origId); for (const a of B.arrivals || []) a.fid = rekey(a.fid, fid, origId);
+      if (B.helpers) B.helpers = Object.fromEntries(Object.entries(B.helpers).map(([k, v]) => [rekey(k, fid, origId), v]));
+    }
     for (const [k, d] of Object.entries(S.diplomacy)) {
       const [a, b] = k.split('|'); if (a !== fid && b !== fid) continue;
       const na = rekey(a, fid, origId), nb = rekey(b, fid, origId); if (na === nb) { delete S.diplomacy[k]; continue; }

@@ -8,7 +8,7 @@ const root = path.join(__dirname, '..', 'js');
 const src = ['data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js', 'geo.js', 'terrain.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 const ctx = { localStorage: { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; } }, console };
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP; this.BATTLE = BATTLE; this.HEXMAPS = HEXMAPS;', ctx);
+vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP; this.BATTLE = BATTLE; this.HEXMAPS = HEXMAPS; this.LATER_OFFICERS = LATER_OFFICERS;', ctx);
 const G = ctx;
 
 let passed = 0, failed = 0;
@@ -134,6 +134,16 @@ test('outstations: every city can raise something; they pay, are held and sacked
   const sk = G.Game.battleSack('puyang', u0.id); assert(sk.ok && q.sites[0].damaged && B2.log.some((l) => /to the torch/.test(l.text)), 'sack: ' + sk.msg);
   delete S2.battles.puyang; const ruined = q.sites.findIndex((s) => s.damaged); q.owner = 'caocao'; const o2 = G.Game.factionOfficers('caocao').find((o) => !G.Game.isRuler(o) && !o.captive); o2.city = 'puyang'; o2.acted = false; q.gold = 5000;
   const rr = G.Game.repairSite('puyang', o2.name, ruined); assert(rr.ok && !q.sites[ruined].damaged, 'rebuilt: ' + rr.msg);
+});
+test('the late age: officers keep arriving to 305, sons follow the famous, and the well runs slow but not dry', () => {
+  const ids = new Set(G.PROVINCES.map((p) => p.id)); const names = new Set();
+  for (const r of G.LATER_OFFICERS) { assert(ids.has(r[8]), `${r[0]} appears in unknown city ${r[8]}`); assert(!names.has(r[0]), `duplicate ${r[0]}`); names.add(r[0]); assert(r[7] > r[6] + 14, `${r[0]} debuts as a child`); }
+  assert(G.LATER_OFFICERS.some((r) => r[7] >= 300), 'arrivals reach 300');
+  for (const [n] of G.HISTORICAL_DEATHS) assert(G.OFFICERS.some((r) => r[0] === n) || G.LATER_OFFICERS.some((r) => r[0] === n), `scripted death for unknown ${n}`);
+  G.Game.newGame(null); const S = G.Game.state();
+  for (let m = 0; m < 12 * 70; m++) { G.Game.endTurn(); if (S.over) break; }
+  const alive = Object.values(S.officers).filter((o) => !o.captive).length; const sons = Object.values(S.officers).filter((o) => o.father).length;
+  assert(S.year >= 250, 'ran to 260: ' + S.year); assert(alive >= 40, `officers alive in ${S.year}: ${alive}`); assert(sons >= 3, `sons born: ${sons}`);
 });
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();

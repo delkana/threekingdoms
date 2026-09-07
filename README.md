@@ -201,6 +201,19 @@ player's house is asked, the AI chooses by weighted odds.
 
 ### The later age
 
+Three shake-ups belong to the age after the heroes. **The mandate passes** (from
+255): a great house with a weak or aged ruler and a minister of surpassing
+gifts is asked to yield the seat; yield, and the house is proclaimed a new
+dynasty (Jin, if he is a Sima) while its most loyal men leave, sometimes to raise
+the old lord's banner in a border city; refuse, and the minister is beheaded, or
+escapes to raise his own. **The war of the princes** (from 285): a great house
+whose ruler is weak and whose kinsmen each command a city sees them turn on one
+another, founding rival houses at war with each other. **The storm from the
+north** (from 300, once): Liu Yuan, Shi Le or their like lead the Xiongnu and Jie
+down from the frontier, taking two or three northern cities in a season as a new
+horde house that fights like the raiders of old.
+
+
 The first twenty years are thick with scripted history; from about 215 the
 events are written against roles rather than names, so they fire in whatever
 world the game has produced.
@@ -289,8 +302,24 @@ Talent favours the under-staffed. A house with fewer officers than cities
 draws extra worthies, and they appear in the cities of the houses that need
 them most, so an unlikely house that suddenly rises to ten cities is not
 stranded with a staff of four. The well is not bottomless: at most seventy
-generated worthies appear in a game, the later ones are lesser men, and none
-come forward after 245. Past that the realm lives on the officers it has.
+generated worthies appear before 245, the later ones lesser men; after 245 the
+well runs at a third of its pace, its men lesser still, and it is dry by 320.
+
+The pool does not end with Zhong Hui. Some fifty more historical figures arrive
+between 247 and 305: the last of Wei and the first of Jin (Wen Yang, Yang Hu, Du
+Yu, Wang Jun, Jia Chong, Zhang Hua, Ma Long, Zhou Chu, Sima Yan and his kin, then
+the generation of the princes and of Liu Kun, Zu Ti, Wang Dun and Wang Dao),
+Shu's last stand (Zhuge Shang, Fu Qian, Luo Xian, Huo Yi, Zhao Guang, Chen
+Shou), Wu's (Zhang Ti, Lu Ji, Lu Yun, Tao Huang, Bu Chan) and, as free men on
+the frontier, the founders of the states that ended Jin: Liu Yuan, Liu Cong, Shi
+Le, Wang Mi, Murong Hui and Zhang Gui. Many carry scripted deaths.
+
+**Sons of the famous.** A notable officer (stats totalling 320 or more, or a
+ruler) past forty-five may be followed by a son, and one who dies past forty
+usually is: the son bears his father's surname, carries two thirds to nine
+tenths of his gifts and sometimes one of his skills, and takes service in his
+father's house at his father's city. At most two sons follow any one man, so the
+lines of Zhao, Zhang, Guan, Xiahou and Sima can run for as long as a game does.
 
 ## Treasures
 
