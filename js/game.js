@@ -9,6 +9,8 @@ const Game = (() => {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
 
+  const ERULES = (typeof ERA !== 'undefined' && ERA.rules) || {};
+  const LEGIT = ERULES.legitimacy || { enabled: true, label: 'the Emperor' };
   const COST = { develop: 200, fortify: 300, recruit: 300, reward: 200, ships: 300, pacify: 100, resettle: 600, plots: { spy: 100, incite: 500, unrest: 300, sabotage: 400, assassinate: 800 } };
   // Roads (typed, with waypoints) define adjacency
   const roadKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -168,8 +170,8 @@ const Game = (() => {
   const captivesIn = (pid, fid) => allOfficers().filter((o) => o.city === pid && o.captive === fid);
   const factionOfficers = (fid) => allOfficers().filter((o) => o.faction === fid && !o.captive);
   const factionProvinces = (fid) => Object.values(S.provinces).filter((p) => p.owner === fid);
-  const rulerOf = (fid) => off(S.factions[fid].ruler);
-  const isRuler = (o) => o.faction && S.factions[o.faction].ruler === o.name;
+  const rulerOf = (fid) => { const F = S.factions[fid]; return F ? off(F.ruler) : null; };
+  const isRuler = (o) => { const F = o.faction && S.factions[o.faction]; return !!F && F.ruler === o.name; };
   const neighbors = (pid) => S.adj[pid].map(prov);
   const enemyNeighbors = (pid) => neighbors(pid).filter((n) => n.owner !== prov(pid).owner);
   const best = (list, stat, fallback) => (list.length ? Math.max(...list.map((o) => o[stat])) : fallback[stat]);
@@ -878,8 +880,8 @@ const Game = (() => {
     // the Emperor follows the city
     if (defF && S.factions[defF].hasEmperor && rulerOf(defF) && rulerOf(defF).city === R.to) {
       S.factions[defF].hasEmperor = false; S.factions[attF].hasEmperor = true;
-      L(`The Emperor falls into the hands of ${fname(attF)}!`, 'head');
-      notice(`The Emperor has passed into the keeping of ${fname(attF)}.`, 'hist', { major: true });
+      L(`${cap(LEGIT.label)} falls into the hands of ${fname(attF)}!`, 'head');
+      notice(`${cap(LEGIT.label)} has passed into the keeping of ${fname(attF)}.`, 'hist', { major: true });
     }
     // guests sheltering here move on with their host, or find a new one
     for (const g of allOfficers().filter((o) => o.city === R.to && o.faction && o.faction !== attF && o.faction !== defF && !o.captive)) {
@@ -1193,7 +1195,7 @@ const Game = (() => {
     const originalLoyalty = o.faction && S.factions[o.faction].alive ? o.loyalty : Math.min(o.loyalty, 60);
     if (originalLoyalty >= 70 && o.faction && S.factions[o.faction].alive && factionProvinces(o.faction).length) return 0;   // a loyal man of a living house cannot be turned
     let c = (ruler.chr - originalLoyalty + 45) / 100;
-    if (o.faction && S.factions[o.faction].ruler === o.name) { if (S.factions[o.faction].alive) return 0; c = Math.min(c, 0.35); }
+    if (isRuler(o)) { if (S.factions[o.faction].alive) return 0; c = Math.min(c, 0.35); }
     return clamp(c, 0.05, 0.9);
   }
 
@@ -1320,7 +1322,8 @@ const Game = (() => {
     // 1. historical figures come of age or come forward on their year (spread across the months)
     for (const r of LATER_OFFICERS) {
       const [name, ldr, war, int_, pol, chr, born, year, city, pref] = r;
-      if (year !== S.year || S.officers[name] || S.arrived[name]) continue;
+      if (year !== S.year) continue;
+      if (S.officers[name] || S.arrived[name]) { S.arrived[name] = S.arrived[name] || S.turn; continue; }   // an event brought him in early
       const month = 1 + (name.length * 7 + city.length * 3) % 12;
       if (S.month !== month) continue;
       S.arrived[name] = S.turn;
@@ -1394,8 +1397,9 @@ const Game = (() => {
     return yearly / 12;
   }
   const familyName = (name) => name.split(' ')[0];
+  const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
   function heirScore(fid, o) {
-    const fam = familyName(S.factions[fid].ruler) === familyName(o.name) ? 60 : 0;
+    const F = S.factions[fid]; const fam = F && familyName(F.ruler) === familyName(o.name) ? 60 : 0;
     return fam + o.ldr + o.chr + o.pol / 2 + o.int / 2;
   }
   const heirCandidates = (fid) => factionOfficers(fid).filter((o) => !isRuler(o)).sort((a, b) => heirScore(fid, b) - heirScore(fid, a));
@@ -2220,6 +2224,9 @@ const Game = (() => {
 
     advanceMonth();
     processBattlesForNewMonth();
+    for (const o of allOfficers()) if (o.faction && !S.factions[o.faction]) { o.faction = null; o.loyalty = 0; }   // a house that was re-keyed leaves no one serving a ghost
+    for (const o of allOfficers()) if (o.captive && !S.factions[o.captive]) o.captive = null;
+    for (const fid of Object.keys(S.factions)) if (S.factions[fid].alive) ensureRuler(fid);   // the month never ends with a house leaderless
     checkGameOver();
     snapshotMonth();
     return S.notices;
@@ -2882,6 +2889,7 @@ const Game = (() => {
     SCENARIOS, undoMonth, canUndo, slotInfo, BIOS, CITY_NOTES, detectPhase,
     pacify, resettle, setPosture, battleFor, playerBattles, playerSideOf, battleRequests, battleMessengers, reinforceBattle, battleBeginDay, battleEndDay, battleAutoMonth, battleMove, battleAttack, battleRam, battleWithdraw, tacticalOn, battleAnswerChallenge, battleSuborn, battleSubornTargets, battleGold, favorsOwed, declineAid, ransomPrice, availableSites, buildSite, repairSite, battleSack, siteName, buildCost, battleFire, battleNight, battleSally, appoint, assumeTitle, eligibleTitle, titleOf, plot, plotTargets, hasSkill, bondGroup, bonded, areEnemies, areRivals, bondedRuler, RANKS, RANK_COST, TITLES, SKILL_INFO,
     hostSeat, exileServe, exilePetition, petitionChance, exileRecruit, exileRaise, exileFight, exileSeekPatron, exileTargets, exileSeize,
+    era: () => (typeof ERA !== 'undefined' ? ERA : { id: 'unknown', title: document.title, rules: {} }),
     getOption: (k) => !!(S && S.options && S.options[k]),
     setOption: (k, v) => { if (S) { S.options = S.options || {}; S.options[k] = !!v; log(`${k === 'historicalDeaths' ? 'Scripted historical deaths' : k} ${v ? 'enabled' : 'disabled'}.`, 'sys'); } },
     HISTORICAL_DEATHS,

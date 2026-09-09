@@ -4,8 +4,11 @@
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
+const era = process.env.ERA || 'threekingdoms';
 const root = path.join(__dirname, '..', 'js');
-const src = ['data.js', 'events.js', 'game.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const eraDir = path.join(root, 'eras', era);
+const load = (f) => fs.readFileSync(path.join(fs.existsSync(path.join(eraDir, f)) ? eraDir : root, f), 'utf8');
+const src = ['era.js', 'data.js', 'events.js', 'game.js'].map(load).join('\n');
 const ctx = { localStorage: { getItem: () => null, setItem: () => {} }, console };
 vm.createContext(ctx);
 vm.runInContext(src + '\nthis.Game = Game;', ctx);

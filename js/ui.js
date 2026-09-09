@@ -33,6 +33,12 @@ const UI = (() => {
   function toggleMore(open) { const m = $('#more-menu'); m.hidden = open === undefined ? !m.hidden : !open; }
 
   function init() {
+    // the era names the page and the title screen
+    const E = Game.era();
+    if (E && E.title) {
+      document.title = E.title;
+      const t = $('.title'); if (t) t.innerHTML = `${esc(E.sigil || '')}<span>${esc(E.title)}</span>`;
+    }
     const sel = $('#scenario-select');
     sel.innerHTML = SCENARIOS.map((sc) => `<option value="${sc.id}">${sc.year} AD — ${esc(sc.title)}</option>`).join('');
     try { const saved = localStorage.getItem('rotk_scenario'); if (saved && SCENARIOS.some((sc) => sc.id === saved)) { sel.value = saved; scenarioId = saved; } } catch (e) { /* ignore */ }

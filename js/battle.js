@@ -124,6 +124,10 @@ const BATTLE = (() => {
   //  Units: { id, side 'A'|'D', fid, troops, max, training, war, ldr, int, officers:[names], morale, c, r, mp, acted, from }
   // ============================================================
   const MP_PER_DAY = 3, FOOD_PER_MAN_DAY = 0.1 / 30, VOLLEY_RANGE = 2, GATE_HITS = 3;
+  // the rules that differ between ages, from the era pack (js/eras/<id>/era.js)
+  const RULES = (typeof ERA !== 'undefined' && ERA.rules) || {};
+  const duelsAllowed = () => RULES.duels !== false;
+  const siegeMode = () => RULES.siege || 'gates';
   // kinds of unit: foot, horse, bowmen and the siege train
   const KINDS = {
     inf: { label: 'Foot',       glyph: '',  mp: 3, desc: 'Spear and shield: the line of battle.' },
@@ -286,7 +290,7 @@ const BATTLE = (() => {
     return { winner: w.name, loser: l.name, aWins };
   }
   // a challenge may be issued by an unacted unit beside an enemy, once per pair per day, when both have a champion
-  const canChallenge = (B, u, v, ctx) => !u.acted && u.side !== v.side && hexDist(u.c, u.r, v.c, v.r) === 1 && !!champion(B, u, ctx) && !!champion(B, v, ctx) && !(B.duelsToday && B.duelsToday[u.id + ':' + v.id]);
+  const canChallenge = (B, u, v, ctx) => duelsAllowed() && !u.acted && u.side !== v.side && hexDist(u.c, u.r, v.c, v.r) === 1 && !!champion(B, u, ctx) && !!champion(B, v, ctx) && !(B.duelsToday && B.duelsToday[u.id + ':' + v.id]);
   // the AI takes up a challenge when its champion is nearly a match, and issues one when its champion is a match and then some
   const aiAcceptsDuel = (B, u, v, ctx) => {
     const a = champion(B, u, ctx), d = champion(B, v, ctx); if (!a || !d) return false;
@@ -497,12 +501,23 @@ const BATTLE = (() => {
   }
   // an attacker beside a barred, unheld gate spends its action on the ram
   function ramGate(B, u, c, r) {
-    if (u.acted || u.side !== 'A' || terrainAt(B, c, r) !== 'G' || hexDist(u.c, u.r, c, r) !== 1 || unitAt(B, c, r) || gateOpen(B, c, r)) return false;
+    if (u.acted || !rammableFor(B, u).some(([a, d]) => a === c && d === r)) return false;
     B.gates[key(c, r)] = (B.gates[key(c, r)] || 0) + (kindOf(u) === 'eng' ? 2 : 1); u.acted = true; B.lastBlood = B.day; if (B.fights) B.fights.push(key(c, r));
-    log(B, gateOpen(B, c, r) ? `${label(u)} breaks the gate open!` : `${label(u)} sets the ram against the gate (${(B.gates[key(c, r)] || 0)} of ${gateHits(B)} blows).`, 'att');
+    const artillery = siegeMode() === 'artillery';
+    log(B, gateOpen(B, c, r) ? `${label(u)} ${artillery ? 'blows the gate in' : 'breaks the gate open'}!` : `${label(u)} ${artillery ? 'shells the gate' : 'sets the ram against the gate'} (${(B.gates[key(c, r)] || 0)} of ${gateHits(B)} blows).`, 'att');
     return true;
   }
-  const rammableFor = (B, u) => { const m = HEXMAPS[B.city]; return neighbours(u.c, u.r, m.w, m.h).filter(([c, r]) => terrainAt(B, c, r) === 'G' && !unitAt(B, c, r) && !gateOpen(B, c, r)); };
+  // which gates this unit may work on: at the wall with rams, or from as far as it shoots with a siege train
+  const rammableFor = (B, u) => {
+    const m = HEXMAPS[B.city]; if (u.side !== 'A' || u.naval) return [];
+    if (siegeMode() === 'artillery') {
+      if (kindOf(u) !== 'eng') return [];
+      const out = []; const reach = shotRange(B, u);
+      for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) if (terrainAt(B, c, r) === 'G' && !gateOpen(B, c, r) && hexDist(u.c, u.r, c, r) <= reach) out.push([c, r]);
+      return out;
+    }
+    return neighbours(u.c, u.r, m.w, m.h).filter(([c, r]) => terrainAt(B, c, r) === 'G' && !unitAt(B, c, r) && !gateOpen(B, c, r));
+  };
   function attackUnit(B, u, v, ctx, opts = {}) {
     if (u.acted || u.side === v.side) return false;
     const dist = hexDist(u.c, u.r, v.c, v.r);
@@ -818,6 +833,6 @@ const BATTLE = (() => {
     B.arrivals.push({ side, fid, from, troops, food: food || 0, officers: officers || [], training: training || 50, day: B.day + days, exit: exit || null, done: false, fleet: fleet || 0, mix: mix || null });
   }
 
-  return { MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, navigable, fleetCapacity, shipShare, hexDist, neighbours, deployDefender, deployAttacker, deployNaval, deployField, redeployField, siteAt, holds, sackable, sack, gateHits, KINDS, kindOf, mpOf, TEMPERS, temperOf, planOf, commanderOf, visibleTo, hexVisible, encircled, fireTargets, setFire, nightAssault, canShoot, shotRange,
+  return { RULES, duelsAllowed, siegeMode, MAX_UNITS, BASE_UNIT, MP_PER_DAY, FOOD_PER_MAN_DAY, GATE_HITS, unitSize, splitArmy, describeSplit, attachOfficers, TERRAIN, standable, navigable, fleetCapacity, shipShare, hexDist, neighbours, deployDefender, deployAttacker, deployNaval, deployField, redeployField, siteAt, holds, sackable, sack, gateHits, KINDS, kindOf, mpOf, TEMPERS, temperOf, planOf, commanderOf, visibleTo, hexVisible, encircled, fireTargets, setFire, nightAssault, canShoot, shotRange,
     create, addArrival, runDay, beginDay, endDay, aiSide, moveUnit, attackUnit, duel, champion, canChallenge, aiAcceptsDuel, answerChallenge, autoAnswer, melee, subornTargets, subornChance, suborn, ramGate, rammableFor, targetsFor, reach, canReach, withdraw, strength, defenceBonus, sideTroops, sideUnits, sidePower, terrainAt, enterCost, checkOver, anyGateOpen, gateOpen, log };
 })();

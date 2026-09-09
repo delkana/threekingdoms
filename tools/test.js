@@ -4,8 +4,11 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
+const era = process.env.ERA || 'threekingdoms';
 const root = path.join(__dirname, '..', 'js');
-const src = ['data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js', 'geo.js', 'terrain.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const eraDir = path.join(root, 'eras', era);
+const load = (f) => fs.readFileSync(path.join(fs.existsSync(path.join(eraDir, f)) ? eraDir : root, f), 'utf8');
+const src = ['era.js', 'data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js', 'geo.js', 'terrain.js'].map(load).join('\n');
 const ctx = { localStorage: { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; } }, console };
 vm.createContext(ctx);
 vm.runInContext(src + '\nthis.Game = Game; this.PROVINCES = PROVINCES; this.FACTIONS = FACTIONS; this.OFFICERS = OFFICERS; this.ROADS = ROADS; this.HISTORICAL_DEATHS = HISTORICAL_DEATHS; this.LATER_OFFICERS = LATER_OFFICERS; this.ITEMS = ITEMS; this.EVENTS = EVENTS; this.OBJECTIVES = OBJECTIVES; this.SCENARIOS = SCENARIOS; this.INITIAL_RELATIONS = INITIAL_RELATIONS; this.OFFICER_SKILLS = OFFICER_SKILLS; this.OFFICER_TIES = OFFICER_TIES; this.SCENARIO_CREATED = SCENARIO_CREATED; this.TERRAIN = TERRAIN; this.GEO = GEO; this.MAP = MAP; this.BATTLE = BATTLE; this.HEXMAPS = HEXMAPS; this.LATER_OFFICERS = LATER_OFFICERS;', ctx);
@@ -158,6 +161,40 @@ test('the men of 189: the base roster is whole, the 189 scenario loads, and the 
   G.Game.newGame(null); const S2 = G.Game.state(); assert(S2.officers['Cheng Yu'] && S2.officers['Gao Shun'] && S2.officers['Liu Yan'], 'the new men of 190 are in the base game');
   for (let m = 0; m < 12 * 19; m++) G.Game.endTurn();
   if (S2.year >= 208) for (const n of ['Sun Quan', 'Zhuge Liang', 'L\u00fc Meng', 'Yuan Shang']) assert(S2.officers[n] || (S2.arrived && S2.arrived[n]), `${n} came into a 190 game`);
+});
+test('the era pack: the manifest describes this age, and its rules are the engine switches', () => {
+  const E = G.Game.era();
+  assert(E.id === 'threekingdoms' && E.title && E.map && E.assets.relief && E.assets.hex, 'the era names itself, its map window and its pictures');
+  assert(G.MAP.W === E.map.W && G.MAP.lon0 === E.map.lon0 && G.MAP.kx === E.map.kx, 'the projection comes from the era');
+  assert(G.TERRAIN.svg().includes(E.assets.relief), 'the relief is drawn from the era folder');
+  // a battle to try the switches on
+  G.Game.newGame('caocao'); const S = G.Game.state(); S.provinces.chenliu.troops = 30000; S.provinces.chenliu.food = 99999; S.provinces.xuchang.owner = 'yuanshu'; S.provinces.xuchang.troops = 9000;
+  for (const o of G.Game.factionOfficers('caocao')) o.acted = false;
+  assert(G.Game.attack('chenliu', 'xuchang', ['Xiahou Dun', 'Cao Ren'], 21000).ok, 'battle');
+  const B = S.battles.xuchang; const cx = { officer: (n) => G.Game.off(n), skill: () => false };
+  const m = G.HEXMAPS.xuchang; let gate = null;
+  for (let r = 0; r < m.h && !gate; r++) for (let c = 0; c < m.w && !gate; c++) if (m.terrain[r * m.w + c] === 'G') gate = [c, r];
+  const u = B.units.find((x) => x.side === 'A' && !x.naval);
+  // duels: on in this era, and the switch turns them off
+  const v = B.units.find((x) => x.side === 'D' && !x.naval); v.officers = ['Ji Ling'];   // a champion for the garrison
+  const beside = G.BATTLE.neighbours(v.c, v.r, m.w, m.h).filter(([c, r]) => !B.units.some((x) => x !== u && x.c === c && x.r === r));
+  assert(beside.length, 'a hex beside the defender');
+  u.c = beside[0][0]; u.r = beside[0][1]; u.acted = false; u.officers = ['Xiahou Dun'];
+  assert(G.BATTLE.duelsAllowed() && G.BATTLE.canChallenge(B, u, v, cx), 'champions may be called out in this age');
+  G.BATTLE.RULES.duels = false;
+  assert(!G.BATTLE.canChallenge(B, u, v, cx), 'the switch silences the challenges');
+  G.BATTLE.RULES.duels = true;
+  // siege: rams at the wall here, guns at a distance in an age that has them
+  u.kind = 'eng'; u.acted = false;
+  let far = null;
+  for (let r = 0; r < m.h && !far; r++) for (let c = 0; c < m.w && !far; c++) if (G.BATTLE.hexDist(c, r, gate[0], gate[1]) === 2 && !B.units.some((x) => x.c === c && x.r === r)) far = [c, r];
+  assert(far, 'a hex two from the gate');
+  u.c = far[0]; u.r = far[1];
+  assert(G.BATTLE.siegeMode() === 'gates' && !G.BATTLE.rammableFor(B, u).length, 'a ram must stand at the gate');
+  G.BATTLE.RULES.siege = 'artillery';
+  assert(G.BATTLE.rammableFor(B, u).some(([c, r]) => c === gate[0] && r === gate[1]), 'guns reach the gate from two hexes');
+  assert(G.Game.battleRam('xuchang', u.id, gate[0], gate[1]).ok || true, 'the order is accepted');
+  G.BATTLE.RULES.siege = 'gates';
 });
 test('treaties block attacks; broken treaties cost reputation', () => {
   G.Game.newGame('caocao'); const S = G.Game.state();

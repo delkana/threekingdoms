@@ -689,20 +689,50 @@ succession, an exile beginning or ending, the Emperor changing hands, a
 scripted event or famous death, or a completed objective. Untick it to let the
 era run uninterrupted.
 
+## Eras
+
+The engine knows no names, no dates and no dynasties. Everything that belongs to
+a particular age lives in one folder under `js/eras/`, and `js/eras.js` is the
+register of them. Open the game with `?era=<id>` to choose one; the choice is
+remembered. The loader writes that era's five files into the page before the
+engine loads, so the engine finds its world already in place.
+
+An era folder holds `era.js` (the manifest), `data.js`, `events.js` and the two
+generated files `geo.js` and `hexmaps.js`; its pictures live under
+`img/eras/<id>/`. The manifest carries the map window, which is the single
+source for the projection: `tools/buildmap.js`, `buildrelief.js` and
+`buildhex.js` all read it, and all three take `ERA=<id>` in the environment, as
+do `tools/test.js`, `aibench.js` and `endgame.js`.
+
+The manifest also carries the handful of rules that differ between ages:
+
+| Rule | Meaning |
+| --- | --- |
+| `duels` | Champions may ride out and call each other to single combat |
+| `siege` | `gates`: rams at the wall. `artillery`: siege trains batter the gate from as far as they can shoot |
+| `titles` | A court that grants ranks and titles |
+| `legitimacy` | The prize whose holder recruits, treats and taxes better, and what to call it |
+
+To add an age: make `js/eras/<id>/`, write `era.js` and `data.js` and
+`events.js`, generate `geo.js`, the relief and the hex maps with the three tools,
+and add one line to `js/eras.js`.
+
 ## Project layout
 
 | File | Purpose |
 | --- | --- |
 | `index.html` | Page shell |
 | `css/style.css` | Styling |
-| `js/data.js` | Scenario data: map, roads, factions, officers, deaths |
-| `js/events.js` | Historical events, decisions, objectives, destiny paths |
-| `js/geo.js` | Generated: Natural Earth coastline, rivers and lakes in canvas coordinates |
+| `js/eras.js` | The register of eras and the loader that brings one in |
+| `js/eras/<era>/era.js` | An age's manifest: its name, map window, pictures and rules |
+| `js/eras/<era>/data.js` | Its map, roads, houses, officers, titles, deaths and scenarios |
+| `js/eras/<era>/events.js` | Its events, decisions, objectives and destiny paths |
+| `js/eras/<era>/geo.js` | Generated: Natural Earth coastline, rivers and lakes in canvas coordinates |
 | `js/terrain.js` | Static map background drawn from `geo.js` plus mountains, steppe, wall and labels |
 | `tools/buildmap.js` | Rebuilds `js/geo.js` from Natural Earth data |
-| `img/relief.png` | Generated: hillshaded elevation relief of the map window |
-| `tools/buildrelief.js` | Rebuilds `img/relief.png` from open elevation tiles |
-| `hexmaps.html`, `js/hexmaps.js`, `img/hex/` | Battle-map viewer, generated hex data and per-city relief images |
+| `img/eras/<era>/relief.png` | Generated: hillshaded elevation relief of the map window |
+| `tools/buildrelief.js` | Rebuilds the relief from open elevation tiles |
+| `hexmaps.html`, `js/eras/<era>/hexmaps.js`, `img/eras/<era>/hex/` | Battle-map viewer, generated hex data and per-city relief images |
 | `tools/buildhex.js` | Rebuilds the hex battle maps from elevation tiles and Natural Earth water |
 | `js/game.js` | Engine: state, commands, battles, economy, AI, save/load |
 | `js/ui.js` | Map rendering, panels, dialogs |

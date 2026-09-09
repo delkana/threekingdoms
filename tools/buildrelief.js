@@ -9,10 +9,14 @@
 // with a north-west light, tinted by height in the game's palette and written as a PNG. No dependencies.
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const zlib = require('zlib');
 
 // keep in step with MAP in js/data.js
-const MAP = { W: 1400, H: 1180, lon0: 100.5, lat1: 42.4, kx: 56, ky: 55.5 };
+const ERA_ID = process.env.ERA || 'threekingdoms';
+const ERA_DIR = path.join(__dirname, '..', 'js', 'eras', ERA_ID);
+const ERA = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ERA_DIR, 'era.js'), 'utf8') + ';this.E = ERA;', c); return c.E; })();
+const MAP = ERA.map;
 const Z = 7, N = 1 << Z, TILE = 256;
 const cacheDir = process.argv[2] || path.join(__dirname, 'relief-tiles');
 

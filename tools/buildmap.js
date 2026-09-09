@@ -9,9 +9,13 @@
 // (MAP), simplified, and written as compact polylines/polygons in canvas coordinates.
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 // keep in step with MAP in js/data.js
-const MAP = { W: 1400, H: 1180, lon0: 100.5, lat1: 42.4, kx: 56, ky: 55.5 };
+const ERA_ID = process.env.ERA || 'threekingdoms';
+const ERA_DIR = path.join(__dirname, '..', 'js', 'eras', ERA_ID);
+const ERA = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ERA_DIR, 'era.js'), 'utf8') + ';this.E = ERA;', c); return c.E; })();
+const MAP = ERA.map;
 const project = (lon, lat) => [(lon - MAP.lon0) * MAP.kx, (MAP.lat1 - lat) * MAP.ky];
 const BOX = { lon0: MAP.lon0 - 0.5, lon1: MAP.lon0 + MAP.W / MAP.kx + 0.5, lat0: MAP.lat1 - MAP.H / MAP.ky - 0.5, lat1: MAP.lat1 + 0.5 };
 
@@ -124,6 +128,6 @@ const lines = (geom) => geom.type === 'LineString' ? [geom.coordinates] : geom.t
 // Coastline (50m), rivers and lakes (10m) clipped to the game's window on China and projected to canvas coordinates.
 const GEO = ${JSON.stringify({ land: landOut, rivers: riverOut, lakes: lakeOut })};
 `;
-  fs.writeFileSync(path.join(__dirname, '..', 'js', 'geo.js'), out);
-  console.log(`land polygons ${landOut.length} (${landOut.reduce((a, p) => a + p.length, 0)} pts), rivers ${riverOut.length} pieces (${riverOut.reduce((a, r) => a + r.pts.length, 0)} pts), lakes ${lakeOut.length}; js/geo.js ${Math.round(out.length / 1024)} KB`);
+  fs.writeFileSync(path.join(ERA_DIR, 'geo.js'), out);
+  console.log(`land polygons ${landOut.length} (${landOut.reduce((a, p) => a + p.length, 0)} pts), rivers ${riverOut.length} pieces (${riverOut.reduce((a, r) => a + r.pts.length, 0)} pts), lakes ${lakeOut.length}; ${ERA_ID}/geo.js ${Math.round(out.length / 1024)} KB`);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -22,14 +22,17 @@ const vm = require('vm');
 
 const W = 13, H = 12, HEX_KM = 5, CC = 6, CR = 5;
 const PX_PER_KM = 4;                                   // relief raster resolution
-const MAP = { W: 1400, H: 1180, lon0: 100.5, lat1: 42.4, kx: 56, ky: 55.5 };
+const ERA_ID = process.env.ERA || 'threekingdoms';
+const ERA_DIR = path.join(__dirname, '..', 'js', 'eras', ERA_ID);
+const ERA = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ERA_DIR, 'era.js'), 'utf8') + ';this.E = ERA;', c); return c.E; })();
+const MAP = ERA.map;
 const project = (lon, lat) => [(lon - MAP.lon0) * MAP.kx, (MAP.lat1 - lat) * MAP.ky];
 const cacheDir = process.argv[2] || path.join(__dirname, 'relief-tiles');
 const neDir = process.argv[3] || process.argv[2] || path.join(__dirname, 'naturalearth');
 const Z = 10, N = 1 << Z, TILE = 256;
 
 // ---- game data ----
-const root = path.join(__dirname, '..', 'js');
+const root = ERA_DIR;
 const ctx = {}; vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, 'data.js'), 'utf8') + fs.readFileSync(path.join(root, 'geo.js'), 'utf8') + '; this.PROVINCES = PROVINCES; this.ROADS = ROADS; this.GEO = GEO; this.FLOOD_PLAIN = FLOOD_PLAIN;', ctx);
 const { PROVINCES, ROADS, GEO, FLOOD_PLAIN } = ctx;

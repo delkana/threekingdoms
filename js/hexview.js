@@ -20,6 +20,7 @@ const HEXVIEW = (() => {
     'W': { name: 'Wall',     color: 'rgba(200,170,110,0.62)', swatch: '#a89060' },
     'G': { name: 'Gate',     color: 'rgba(230,180,80,0.70)',  swatch: '#c9a24a' },
   };
+  const HEX_SRC = (typeof ERA !== 'undefined' && ERA.assets && ERA.assets.hex) || 'img/hex/';
   const HEX_KM = 5, CC = 6, CR = 5;
   const byId = Object.fromEntries(PROVINCES.map((p) => [p.id, p]));
   let uid = 0;
@@ -51,7 +52,7 @@ const HEXVIEW = (() => {
     </defs>
     <g clip-path="url(#frame${u})">
     <rect x="0" y="0" width="${W}" height="${H}" fill="url(#sea${u})"/><rect x="0" y="0" width="${W}" height="${H}" fill="url(#waves${u})"/>
-    <image href="img/hex/${id}.png" x="${f1(ix)}" y="${f1(iy)}" width="${f1(iw)}" height="${f1(ih)}" preserveAspectRatio="none"/>`;
+    <image href="${HEX_SRC}${id}.png" x="${f1(ix)}" y="${f1(iy)}" width="${f1(iw)}" height="${f1(ih)}" preserveAspectRatio="none"/>`;
     // hex tints and grid
     for (let r = 0; r < m.h; r++) for (let c = 0; c < m.w; c++) {
       const t = m.terrain[r * m.w + c]; const [cx, cy] = centre(c, r, s); const wall = 'WGC'.includes(t);

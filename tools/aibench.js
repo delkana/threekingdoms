@@ -1,8 +1,11 @@
 // Strategic AI benchmark: observer games, abstract battles for speed. Reports unification, stalls, attacks and captures.
 // Usage: node tools/aibench.js [games] [years]
 const fs = require('fs'), vm = require('vm'), path = require('path');
+const era = process.env.ERA || 'threekingdoms';
 const root = path.join(__dirname, '..', 'js');
-const src = ['data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const eraDir = path.join(root, 'eras', era);
+const load = (f) => fs.readFileSync(path.join(fs.existsSync(path.join(eraDir, f)) ? eraDir : root, f), 'utf8');
+const src = ['era.js', 'data.js', 'events.js', 'hexmaps.js', 'battle.js', 'game.js'].map(load).join('\n');
 const ctx = { localStorage: { getItem: () => null, setItem: () => {} }, console };
 vm.createContext(ctx); vm.runInContext(src + '\nthis.Game = Game;', ctx); const { Game } = ctx;
 const games = +(process.argv[2] || 10), years = +(process.argv[3] || 50);
